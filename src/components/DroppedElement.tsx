@@ -11,18 +11,24 @@ interface DroppedElementProps {
     y: number;
     width: number;
     height: number;
-    content: string;
+    properties: { [key: string]: any };
   };
   onResize: (id: number, width: number, height: number) => void;
-  onContentChange: (id: number, content: string) => void;
+  onPropertiesChange: (
+    id: number,
+    newProperties: { [key: string]: any }
+  ) => void;
+  onSelect: () => void;
+  isSelected: boolean;
 }
 
 const DroppedElement: React.FC<DroppedElementProps> = ({
   element,
   onResize,
-  onContentChange,
+  onPropertiesChange,
+  onSelect,
+  isSelected,
 }) => {
-  // Make the element draggable
   const [{ isDragging }, drag] = useDrag(() => ({
     type: "element",
     item: { id: element.id, type: element.type },
@@ -31,7 +37,6 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     }),
   }));
 
-  // Ref to track resizing state
   const resizeRef = useRef<{
     isResizing: boolean;
     startX: number;
@@ -40,8 +45,8 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     startHeight: number;
   } | null>(null);
 
-  // Start resizing on mouse down
   const handleMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering onSelect
     e.preventDefault();
     resizeRef.current = {
       isResizing: true,
@@ -54,7 +59,6 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     document.addEventListener("mouseup", handleMouseUp);
   };
 
-  // Update size during mouse move
   const handleMouseMove = (e: MouseEvent) => {
     if (resizeRef.current && resizeRef.current.isResizing) {
       const dx = e.clientX - resizeRef.current.startX;
@@ -65,7 +69,6 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     }
   };
 
-  // Stop resizing on mouse up
   const handleMouseUp = () => {
     if (resizeRef.current) {
       resizeRef.current.isResizing = false;
@@ -74,10 +77,147 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     document.removeEventListener("mouseup", handleMouseUp);
   };
 
+  const renderContent = () => {
+    switch (element.type) {
+      case "header":
+        return (
+          <div
+            className="flex items-center justify-between p-2"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+            }}
+          >
+            <img src={element.properties.logoUrl} alt="Logo" className="h-8" />
+            <nav>
+              {element.properties.navLinks.map(
+                (link: { url: string; text: string }, index: number) => (
+                  <a
+                    key={index}
+                    href={link.url}
+                    style={{
+                      color: element.properties.textColor,
+                      fontSize: element.properties.fontSize,
+                      fontWeight: element.properties.fontWeight,
+                    }}
+                    className="mx-2"
+                  >
+                    {link.text}
+                  </a>
+                )
+              )}
+            </nav>
+          </div>
+        );
+      case "navbar":
+        return (
+          <nav
+            className="p-2"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+            }}
+          >
+            {element.properties.menuItems.map(
+              (item: { url: string; text: string }, index: number) => (
+                <a
+                  key={index}
+                  href={item.url}
+                  style={{
+                    color: element.properties.textColor,
+                    fontSize: element.properties.fontSize,
+                    fontWeight: element.properties.fontWeight,
+                  }}
+                  className="mx-4"
+                >
+                  {item.text}
+                </a>
+              )
+            )}
+          </nav>
+        );
+      case "jumbotron":
+        return (
+          <div
+            className="text-center p-4"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+            }}
+          >
+            <h1 className="text-2xl font-bold">
+              {element.properties.heading}
+            </h1>
+            <p className="mt-2">{element.properties.subtext}</p>
+            <a
+              href={element.properties.buttonUrl}
+              className="mt-4 inline-block px-4 py-2 rounded"
+              style={{ backgroundColor: "#007bff", color: "#fff" }}
+            >
+              {element.properties.buttonText}
+            </a>
+          </div>
+        );
+      case "text":
+        return (
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) =>
+              onPropertiesChange(element.id, {
+                content: e.currentTarget.textContent || "",
+              })
+            }
+            className="w-full p-2"
+            style={{
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+            }}
+          >
+            {element.properties.content}
+          </div>
+        );
+      case "button":
+        return (
+          <button
+            className="w-full h-full rounded"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+            }}
+          >
+            {element.properties.text}
+          </button>
+        );
+      case "image":
+        return (
+          <img
+            src={element.properties.imageUrl}
+            alt="Image"
+            className="w-full h-full object-cover"
+          />
+        );
+      default:
+        return <div>Unknown Element</div>;
+    }
+  };
+
   return (
     <div
+      onClick={onSelect} // When the element is clicked, mark it as selected.
       ref={drag}
-      className="absolute border border-gray-600 bg-gray-800 text-white select-none"
+      className={`absolute border border-gray-600 bg-gray-800 select-none transition-all duration-150 ${
+        isSelected ? "ring-2 ring-blue-500" : ""
+      }`}
       style={{
         left: element.x,
         top: element.y,
@@ -86,22 +226,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
         opacity: isDragging ? 0.5 : 1,
       }}
     >
-      {element.type === "button" ? (
-        <button className="w-full h-full bg-blue-600 text-white">
-          {element.content}
-        </button>
-      ) : (
-        <div
-          contentEditable
-          suppressContentEditableWarning
-          onBlur={(e) =>
-            onContentChange(element.id, e.currentTarget.textContent || "")
-          }
-          className="w-full p-2"
-        >
-          {element.content}
-        </div>
-      )}
+      {renderContent()}
       <div
         className="absolute bottom-0 right-0 w-3 h-3 bg-gray-500 cursor-se-resize"
         onMouseDown={handleMouseDown}
