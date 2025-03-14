@@ -1,36 +1,165 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Website Builder
+
+A drag-and-drop website builder that helps you design and generate code for web applications across multiple frameworks.
+
+## Overview
+
+Website Builder is a powerful visual development tool that allows you to design websites through an intuitive drag-and-drop interface. Once your design is complete, you can generate all the necessary code files for your project in your chosen framework.
+
+![Website Builder Screenshot](./public/screenshot/website-builder.png)
+## Features
+
+- **Visual Drag-and-Drop Interface**: Design your website without writing code
+- **Multi-Page Support**: Create and manage multiple pages for your website
+- **Component Library**: Pre-built components including headers, navbars, jumbotrons, text blocks, buttons, and images
+- **Framework Selection**: Generate code for different frameworks (React fully supported, Angular and Vue coming soon)
+- **Code Generation**: Download a complete, ready-to-run project with all necessary files
+- **Property Customization**: Fine-tune the appearance and behavior of each component
+- **Page Navigation**: Link components to navigate between pages
+
+## Supported Frameworks
+
+- **React**: Full support with React Router for multi-page applications (development in progress)
+- **Angular**: Limited support (coming soon)
+- **Vue**: Limited support (coming soon)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18.0.0 or higher
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/AjinND/website-builder.git
+cd website-builder
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Start the development server:
 ```bash
 npm run dev
 # or
 yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How to Use
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Select a Framework**: Choose your target framework (React, Angular, or Vue)
+2. **Choose a Device Size**: Select the device size to design for (Desktop, Laptop, Tablet, Mobile)
+3. **Build Your Pages**:
+   - Drag elements from the toolbox onto the canvas
+   - Click on elements to edit their properties in the style editor
+   - Add multiple pages using the + button in the page tabs
+   - Set up navigation between pages
+4. **Generate Code**: Click the "Generate Code" button to download a zip file with all your project files
+5. **Run Your Project**: Extract the zip file and follow the instructions in the generated README to run your project locally
 
-## Learn More
+## Working with Components
 
-To learn more about Next.js, take a look at the following resources:
+### Available Components
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Header**: Page header with logo and navigation links
+- **Navbar**: Navigation menu for your website
+- **Jumbotron**: Hero section with heading, text, and call to action
+- **Text**: Simple text content blocks
+- **Button**: Clickable buttons with customizable actions
+- **Image**: Image elements with optional links
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Editing Components
 
-## Deploy on Vercel
+1. Click on any component on the canvas to select it
+2. Use the style editor panel to modify its properties:
+   - Change text content, colors, and font styles
+   - Set up links to other pages or external URLs
+   - Customize component-specific properties
+   - (more features to be added)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Generated Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+When you generate code for a React project, you'll receive a zip file with the following structure:
+
+```
+my-react-app/
+├── package.json
+├── postcss.config.js
+├── tailwind.config.js
+├── public/
+│   └── index.html
+└── src/
+    ├── App.js
+    ├── AppRouter.js
+    ├── index.js
+    ├── index.css
+    ├── components/
+    │   ├── Header.js
+    │   ├── Navbar.js
+    │   ├── Jumbotron.js
+    │   ├── TextBlock.js
+    │   ├── ButtonElement.js
+    │   └── ImageElement.js
+    └── pages/
+        ├── Home.js
+        └── [OtherPages].js
+```
+
+## Running the Generated Project
+
+1. Extract the zip file
+2. Navigate to the project directory
+3. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+4. Start the development server:
+```bash
+npm start
+# or
+yarn start
+```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to see your website
+
+## Development
+
+This project was built using:
+
+- [Next.js](https://nextjs.org/) - React framework
+- [React DnD](https://react-dnd.github.io/react-dnd/) - Drag and drop for React
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [JSZip](https://stuk.github.io/jszip/) - JavaScript library for creating zip files
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## Roadmap
+
+- Full support for React, Angular and Vue frameworks
+- Implement fully responsive design
+- Additional components (forms, cards, carousels, etc.)
+- Custom CSS editor
+- Template library
+- Integrate AI for code generation
+- Collaborative editing
+- Real-Time preview to see your changes instantly as you build.
