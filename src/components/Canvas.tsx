@@ -36,6 +36,8 @@ export default function Canvas({
   const [selectedElementId, setSelectedElementId] = useState<number | null>(
     null
   );
+  // State for additional vertical space
+  const [extraHeight, setExtraHeight] = useState(0);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const safeUpdateElements = (newElements: DroppedElementType[]) => {
@@ -44,10 +46,20 @@ export default function Canvas({
         newElements.map((el) => ({
           ...el,
           x: Math.max(0, Math.min(device.width - el.width, el.x)),
-          y: Math.max(0, Math.min(device.height - el.height, el.y)),
+          y: Math.max(
+            0,
+            Math.min(device.height + extraHeight - el.height, el.y)
+          ),
         }))
       );
     }
+  };
+
+  // New function to delete an element by its id
+  const deleteElement = (id: number) => {
+    const updatedElements = elements.filter((el) => el.id !== id);
+    safeUpdateElements(updatedElements);
+    setSelectedElementId(null);
   };
 
   const [{ isOver }, drop] = useDrop(
@@ -96,7 +108,7 @@ export default function Canvas({
         isOver: !!monitor.isOver(),
       }),
     }),
-    [elements, device, updateElements]
+    [elements, device, extraHeight, updateElements]
   );
 
   const updateElementSize = (id: number, width: number, height: number) => {
@@ -187,10 +199,9 @@ export default function Canvas({
           isOver ? "bg-gray-700" : "bg-gray-900"
         }`}
         style={{
-          // Use minWidth and minHeight so the canvas can grow beyond the device size,
-          // enabling scrolling when elements are moved outside the initial viewport.
+          // The canvas height is defined by the device height plus any extra space added.
           minWidth: device.width,
-          minHeight: device.height,
+          minHeight: device.height + extraHeight,
           backgroundImage:
             "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px)",
         }}
@@ -213,6 +224,15 @@ export default function Canvas({
           Generate Code
         </button>
       </div>
+      {/* "Add More Space" button */}
+      <div className="mt-4 flex justify-center">
+        <button
+          onClick={() => setExtraHeight(extraHeight + 300)}
+          className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+        >
+          Add More Space
+        </button>
+      </div>
       {selectedElement && (
         <div className="mt-4">
           <h3 className="text-white">
@@ -226,6 +246,15 @@ export default function Canvas({
             elementType={selectedElement.type}
             availablePages={allPages}
           />
+          {/* Delete Button */}
+          <div className="mt-2">
+            <button
+              onClick={() => deleteElement(selectedElement.id)}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Delete Element
+            </button>
+          </div>
         </div>
       )}
     </div>
