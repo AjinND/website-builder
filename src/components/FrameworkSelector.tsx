@@ -20,10 +20,17 @@ export default function FrameworkSelector({
         onChange={(e) => setFramework(e.target.value)}
         className="bg-gray-800 text-white p-1 rounded"
       >
-        <option value="React">React</option>
+        <option value="React">React (with React Router)</option>
         <option value="Angular">Angular</option>
         <option value="Vue">Vue</option>
       </select>
+      <span className="ml-4 text-xs text-gray-400">
+        {framework === "React" 
+          ? "Using React 18 with React Router for multi-page navigation" 
+          : framework === "Angular" 
+            ? "Angular support is limited" 
+            : "Vue support is limited"}
+      </span>
     </div>
   );
 }

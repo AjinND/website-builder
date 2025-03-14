@@ -20,6 +20,7 @@ interface DroppedElementProps {
   ) => void;
   onSelect: () => void;
   isSelected: boolean;
+  availablePages: { id: string; name: string }[];
 }
 
 const DroppedElement: React.FC<DroppedElementProps> = ({
@@ -28,14 +29,18 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
   onPropertiesChange,
   onSelect,
   isSelected,
+  availablePages,
 }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "element",
-    item: { id: element.id, type: element.type },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
+  const [{ isDragging }, drag] = useDrag(
+    () => ({
+      type: "element",
+      item: () => ({ id: element.id, type: element.type }),
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
     }),
-  }));
+    [element.id]
+  );
 
   const resizeRef = useRef<{
     isResizing: boolean;
@@ -63,8 +68,8 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     if (resizeRef.current && resizeRef.current.isResizing) {
       const dx = e.clientX - resizeRef.current.startX;
       const dy = e.clientY - resizeRef.current.startY;
-      const newWidth = resizeRef.current.startWidth + dx;
-      const newHeight = resizeRef.current.startHeight + dy;
+      const newWidth = Math.max(50, resizeRef.current.startWidth + dx);
+      const newHeight = Math.max(30, resizeRef.current.startHeight + dy);
       onResize(element.id, newWidth, newHeight);
     }
   };
@@ -92,17 +97,18 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
           >
             <img src={element.properties.logoUrl} alt="Logo" className="h-8" />
             <nav>
-              {element.properties.navLinks.map(
+              {element.properties.navLinks?.map(
                 (link: { url: string; text: string }, index: number) => (
                   <a
                     key={index}
-                    href={link.url}
+                    href="#"
                     style={{
                       color: element.properties.textColor,
                       fontSize: element.properties.fontSize,
                       fontWeight: element.properties.fontWeight,
                     }}
                     className="mx-2"
+                    onClick={(e) => e.preventDefault()}
                   >
                     {link.text}
                   </a>
@@ -122,17 +128,18 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               fontWeight: element.properties.fontWeight,
             }}
           >
-            {element.properties.menuItems.map(
+            {element.properties.menuItems?.map(
               (item: { url: string; text: string }, index: number) => (
                 <a
                   key={index}
-                  href={item.url}
+                  href="#"
                   style={{
                     color: element.properties.textColor,
                     fontSize: element.properties.fontSize,
                     fontWeight: element.properties.fontWeight,
                   }}
                   className="mx-4"
+                  onClick={(e) => e.preventDefault()}
                 >
                   {item.text}
                 </a>
@@ -151,14 +158,13 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               fontWeight: element.properties.fontWeight,
             }}
           >
-            <h1 className="text-2xl font-bold">
-              {element.properties.heading}
-            </h1>
+            <h1 className="text-2xl font-bold">{element.properties.heading}</h1>
             <p className="mt-2">{element.properties.subtext}</p>
             <a
-              href={element.properties.buttonUrl}
+              href="#"
               className="mt-4 inline-block px-4 py-2 rounded"
               style={{ backgroundColor: "#007bff", color: "#fff" }}
+              onClick={(e) => e.preventDefault()}
             >
               {element.properties.buttonText}
             </a>
@@ -174,7 +180,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
                 content: e.currentTarget.textContent || "",
               })
             }
-            className="w-full p-2"
+            className="w-full h-full p-2 overflow-auto"
             style={{
               color: element.properties.textColor,
               fontSize: element.properties.fontSize,
@@ -224,6 +230,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
         width: element.width,
         height: element.height,
         opacity: isDragging ? 0.5 : 1,
+        overflow: "hidden",
       }}
     >
       {renderContent()}
