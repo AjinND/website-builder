@@ -1,10 +1,15 @@
+"use client";
+
 import React from "react";
-import DndWrapper from "@/components/DndWrapper";
-import PageManager from "@/components/PageManager";
+import dynamic from 'next/dynamic';
+
+// Use dynamic imports with SSR disabled for components that use client-only features
+const DndWrapper = dynamic(() => import('@/components/DndWrapper'), { ssr: false });
+const PageManager = dynamic(() => import('@/components/PageManager'), { ssr: false });
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="h-screen overflow-auto bg-black text-white">
       <DndWrapper>
         <PageManager />
       </DndWrapper>
