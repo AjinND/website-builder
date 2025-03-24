@@ -190,6 +190,32 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
             {element.properties.content}
           </div>
         );
+      case "heading":
+        return (
+          <div
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={(e) =>
+              onPropertiesChange(element.id, {
+                content: e.currentTarget.textContent || "",
+              })
+            }
+            className="w-full h-full p-2 overflow-auto"
+            style={{
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+              fontWeight: element.properties.fontWeight,
+              textAlign: element.properties.textAlign,
+            }}
+          >
+            {element.properties.level === "h1" && <h1 className="text-3xl font-bold">{element.properties.content}</h1>}
+            {element.properties.level === "h2" && <h2 className="text-2xl font-bold">{element.properties.content}</h2>}
+            {element.properties.level === "h3" && <h3 className="text-xl font-bold">{element.properties.content}</h3>}
+            {element.properties.level === "h4" && <h4 className="text-lg font-bold">{element.properties.content}</h4>}
+            {element.properties.level === "h5" && <h5 className="text-base font-bold">{element.properties.content}</h5>}
+            {element.properties.level === "h6" && <h6 className="text-sm font-bold">{element.properties.content}</h6>}
+          </div>
+        );
       case "button":
         return (
           <button
@@ -199,6 +225,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               color: element.properties.textColor,
               fontSize: element.properties.fontSize,
               fontWeight: element.properties.fontWeight,
+              borderRadius: element.properties.borderRadius,
             }}
           >
             {element.properties.text}
@@ -208,13 +235,268 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
         return (
           <img
             src={element.properties.imageUrl}
-            alt="Image"
-            className="w-full h-full object-cover"
+            alt={element.properties.altText || "Image"}
+            className="w-full h-full"
+            style={{
+              objectFit: element.properties.objectFit || "cover",
+            }}
           />
+        );
+      case "footer":
+        return (
+          <footer
+            className="p-4 w-full"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+            }}
+          >
+            <div className="flex flex-wrap justify-between">
+              <div>
+                <p>{element.properties.copyright}</p>
+              </div>
+              <div className="flex space-x-4">
+                {element.properties.links?.map(
+                  (link: { url: string; text: string }, index: number) => (
+                    <a
+                      key={index}
+                      href="#"
+                      style={{ color: element.properties.textColor }}
+                      className="hover:underline"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      {link.text}
+                    </a>
+                  )
+                )}
+              </div>
+              <div className="flex space-x-4 mt-2">
+                {element.properties.socialLinks?.map(
+                  (link: { platform: string; url: string }, index: number) => (
+                    <a
+                      key={index}
+                      href="#"
+                      style={{ color: element.properties.textColor }}
+                      className="hover:underline"
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      {link.platform}
+                    </a>
+                  )
+                )}
+              </div>
+            </div>
+          </footer>
+        );
+      case "divider":
+        return (
+          <hr
+            style={{
+              borderColor: element.properties.color,
+              borderWidth: element.properties.thickness,
+              borderStyle: element.properties.style,
+              margin: element.properties.margin,
+            }}
+          />
+        );
+      case "container":
+        return (
+          <div
+            className="w-full h-full p-4"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              padding: element.properties.padding,
+              borderRadius: element.properties.borderRadius,
+              borderColor: element.properties.borderColor,
+              borderWidth: element.properties.borderWidth,
+              borderStyle: element.properties.borderStyle,
+            }}
+          >
+            <div className="text-center text-gray-400 text-xs">Container Element</div>
+          </div>
+        );
+      case "card":
+        return (
+          <div
+            className="w-full h-full overflow-hidden flex flex-col"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              color: element.properties.textColor,
+              borderRadius: element.properties.borderRadius,
+              boxShadow: element.properties.boxShadow,
+            }}
+          >
+            {element.properties.imageUrl && (
+              <img
+                src={element.properties.imageUrl}
+                alt="Card image"
+                className="w-full h-24 object-cover"
+              />
+            )}
+            <div className="p-4 flex-1">
+              <h3 className="font-bold mb-2">{element.properties.title}</h3>
+              <p className="text-sm mb-4">{element.properties.content}</p>
+              {element.properties.buttonText && (
+                <button
+                  className="px-4 py-1 text-sm rounded"
+                  style={{
+                    backgroundColor: "#007bff",
+                    color: "#ffffff",
+                  }}
+                >
+                  {element.properties.buttonText}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      case "list":
+        return (
+          <div
+            className="w-full h-full p-2 overflow-auto"
+            style={{
+              color: element.properties.textColor,
+              fontSize: element.properties.fontSize,
+            }}
+          >
+            {element.properties.type === "ordered" ? (
+              <ol className="list-decimal pl-5" style={{ lineHeight: element.properties.spacing }}>
+                {element.properties.items.map((item: string, index: number) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ol>
+            ) : (
+              <ul className="list-disc pl-5" style={{ lineHeight: element.properties.spacing }}>
+                {element.properties.items.map((item: string, index: number) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      case "form":
+        return (
+          <form
+            className="w-full h-full p-4 overflow-auto"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+            }}
+            onSubmit={(e) => e.preventDefault()}
+          >
+            {element.properties.fields.map((field: any, index: number) => (
+              <div key={index} className="mb-4">
+                <label
+                  className="block mb-1 text-sm font-medium"
+                  style={{ color: element.properties.labelColor }}
+                >
+                  {field.label} {field.required && <span className="text-red-500">*</span>}
+                </label>
+                {field.type === "textarea" ? (
+                  <textarea
+                    placeholder={field.placeholder}
+                    className="w-full p-2 border rounded"
+                    style={{ borderColor: element.properties.borderColor }}
+                    required={field.required}
+                  />
+                ) : (
+                  <input
+                    type={field.type}
+                    placeholder={field.placeholder}
+                    className="w-full p-2 border rounded"
+                    style={{ borderColor: element.properties.borderColor }}
+                    required={field.required}
+                  />
+                )}
+              </div>
+            ))}
+            <button
+              type="submit"
+              className="px-4 py-2 rounded"
+              style={{
+                backgroundColor: element.properties.submitButtonColor,
+                color: "#ffffff",
+              }}
+            >
+              {element.properties.submitButtonText}
+            </button>
+          </form>
+        );
+      case "input":
+        return (
+          <div className="w-full h-full p-2">
+            <label
+              className="block mb-1 text-sm font-medium"
+              style={{ color: element.properties.labelColor }}
+            >
+              {element.properties.label} {element.properties.required && <span className="text-red-500">*</span>}
+            </label>
+            <input
+              type={element.properties.type}
+              placeholder={element.properties.placeholder}
+              className="w-full border"
+              style={{
+                borderColor: element.properties.borderColor,
+                borderRadius: element.properties.borderRadius,
+                padding: element.properties.padding,
+              }}
+              required={element.properties.required}
+            />
+          </div>
+        );
+      case "video":
+        return (
+          <div className="w-full h-full flex items-center justify-center">
+            <iframe
+              src={element.properties.videoUrl}
+              title="Video"
+              className="w-full h-full"
+              allowFullScreen
+              frameBorder="0"
+              allow={element.properties.autoplay ? "autoplay" : ""}
+              style={{
+                width: element.properties.width,
+                height: element.properties.height,
+              }}
+            />
+          </div>
+        );
+      case "icon":
+        return (
+          <div className="w-full h-full flex items-center justify-center">
+            <div
+              className="text-center"
+              style={{
+                fontSize: element.properties.size,
+                color: element.properties.color,
+              }}
+            >
+              {/* Using a simple star as placeholder - in a real app, you'd use an icon library */}
+              ★
+            </div>
+          </div>
         );
       default:
         return <div>Unknown Element</div>;
     }
+  };
+
+  // Determine if this is a full-width element that should adapt to container width
+  const isFullWidthElement = ['header', 'footer', 'navbar', 'divider'].includes(element.type);
+
+  // Calculate percentage width for responsive elements
+  const getResponsiveStyles = () => {
+    // Base styles that apply to all elements
+    const baseStyles = {
+      left: element.x,
+      top: element.y,
+      width: element.width,
+      height: element.height,
+      opacity: isDragging ? 0.5 : 1,
+      overflow: "hidden",
+    };
+
+    return baseStyles;
   };
 
   return (
@@ -223,21 +505,20 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       ref={drag}
       className={`absolute border border-gray-600 bg-gray-800 select-none transition-all duration-150 ${
         isSelected ? "ring-2 ring-blue-500" : ""
-      }`}
-      style={{
-        left: element.x,
-        top: element.y,
-        width: element.width,
-        height: element.height,
-        opacity: isDragging ? 0.5 : 1,
-        overflow: "hidden",
-      }}
+      } ${isFullWidthElement ? "responsive-element" : ""}`}
+      style={getResponsiveStyles()}
+      data-element-type={element.type}
     >
       {renderContent()}
       <div
         className="absolute bottom-0 right-0 w-3 h-3 bg-gray-500 cursor-se-resize"
         onMouseDown={handleMouseDown}
       />
+      {isSelected && (
+        <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-1 rounded-bl">
+          {element.type}
+        </div>
+      )}
     </div>
   );
 };

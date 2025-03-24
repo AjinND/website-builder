@@ -3,6 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --toolbox-z-index: 1000;
+  --modal-z-index: 1100;
 }
 
 @theme inline {
@@ -19,8 +21,145 @@
   }
 }
 
-body {
+html, body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  overflow-y: auto;
+}
+
+#__next, main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive element styles */
+.responsive-element {
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+/* Toolbox styles */
+.toolbox-modal {
+  z-index: var(--toolbox-z-index);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.toolbox-header {
+  cursor: move;
+  user-select: none;
+}
+
+/* Draggable element styles */
+.draggable-element {
+  position: absolute;
+  transition: all 0.15s ease;
+}
+
+.draggable-element.selected {
+  z-index: 10;
+}
+
+.draggable-element .resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: #3b82f6;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.draggable-element .resize-handle.top-left {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+
+.draggable-element .resize-handle.top-right {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+
+.draggable-element .resize-handle.bottom-left {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.draggable-element .resize-handle.bottom-right {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+
+/* Device preview styles */
+.device-preview {
+  transition: all 0.3s ease;
+  margin: 0 auto;
+}
+
+.device-preview.desktop {
+  max-width: 100%;
+}
+
+.device-preview.tablet {
+  max-width: 768px;
+  border: 10px solid #333;
+  border-radius: 10px;
+}
+
+.device-preview.mobile {
+  max-width: 375px;
+  border: 16px solid #333;
+  border-radius: 20px;
+}
+
+/* Animation for toolbox */
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.toolbox-slide-in {
+  animation: slideIn 0.3s ease forwards;
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: relative;
+}
+
+.tooltip:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: var(--modal-z-index);
+}
+
+/* Style Editor */
+.style-editor-container {
+  margin-top: 2rem;
+  margin-bottom: 4rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
 }

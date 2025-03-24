@@ -1,13 +1,18 @@
+import { StyleEditorProps } from "@/types/types";
 import React from "react";
 
-interface StyleEditorProps {
-  properties: { [key: string]: any };
-  onChange: (newStyles: { [key: string]: any }) => void;
-  elementType: string;
-  availablePages: { id: string; name: string }[];
-}
+export default function StyleEditor({
+  properties,
+  onChange,
+  elementType,
+  availablePages,
+  isDarkTheme = true
+}: StyleEditorProps) {
 
-export default function StyleEditor({ properties, onChange, elementType, availablePages }: StyleEditorProps) {
+  // Helper function to get theme-appropriate class names for inputs
+  const getInputClassName = (baseClasses: string) => {
+    return `${baseClasses} ${isDarkTheme ? 'bg-gray-700 text-white' : 'bg-white text-gray-800 border border-gray-300'}`;
+  };
   const renderCommonStyles = () => (
     <>
       <label className="block mb-2">
@@ -25,7 +30,7 @@ export default function StyleEditor({ properties, onChange, elementType, availab
           type="number"
           value={parseInt(properties.fontSize) || 16}
           onChange={(e) => onChange({ fontSize: `${e.target.value}px` })}
-          className="ml-2 w-16 bg-gray-700 text-white"
+          className={getInputClassName('ml-2 w-16')}
         />
       </label>
       <label className="block mb-2">
@@ -33,7 +38,7 @@ export default function StyleEditor({ properties, onChange, elementType, availab
         <select
           value={properties.fontWeight || "normal"}
           onChange={(e) => onChange({ fontWeight: e.target.value })}
-          className="ml-2 bg-gray-700 text-white"
+          className={getInputClassName('ml-2')}
         >
           <option value="normal">Normal</option>
           <option value="bold">Bold</option>
@@ -93,7 +98,7 @@ export default function StyleEditor({ properties, onChange, elementType, availab
                 type="text"
                 value={properties.logoUrl || ""}
                 onChange={(e) => onChange({ logoUrl: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white"
+                className={getInputClassName('ml-2 w-full')}
               />
             </label>
             <div className="block mb-2">
@@ -318,7 +323,7 @@ export default function StyleEditor({ properties, onChange, elementType, availab
   };
 
   return (
-    <div className="p-4 bg-gray-800 text-white">
+    <div className={`p-4 ${isDarkTheme ? 'bg-gray-800 text-white' : 'bg-white text-gray-800 border border-gray-300'}`}>
       {renderCommonStyles()}
       {renderElementSpecificFields()}
     </div>
