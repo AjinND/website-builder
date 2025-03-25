@@ -16,9 +16,9 @@ interface Page {
 export default function PageManager() {
   const [framework, setFramework] = useState("React");
   const [device, setDevice] = useState({
-    name: "Desktop Large (1920x1080)",
-    width: 1920,
-    height: 1080,
+    name: "Laptop (1366x768)",
+    width: 1366,
+    height: 768,
   });
   const [isDarkTheme, setIsDarkTheme] = useState(true);
 
@@ -122,7 +122,7 @@ export default function PageManager() {
 
         <div className="flex-1 flex flex-col">
           {/* Page tabs - sticky */}
-          <div className={`sticky top-0 z-10 flex overflow-x-auto ${isDarkTheme ? "bg-gray-800" : "bg-white border-b border-gray-300"}`}>
+          <div className={`sticky top-0 z-30 flex overflow-x-auto ${isDarkTheme ? "bg-gray-800" : "bg-white border-b border-gray-300"}`}>
             {pages.map((page) => (
               <div
                 key={page.id}

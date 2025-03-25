@@ -16,10 +16,16 @@ export interface StyleEditorProps {
   isDarkTheme?: boolean;
 }
 
-export interface Device {
+ interface Device {
   name: string;
   width: number;
   height: number;
+}
+
+export interface DeviceSelectorProps {
+  device: { width: number; height: number; name: string };
+  setDevice: (device: { width: number; height: number; name: string }) => void;
+  isDarkTheme?: boolean;
 }
 
 export interface Page {
@@ -34,5 +40,23 @@ export interface CanvasProps {
   elements: DroppedElementType[];
   updateElements: (elements: DroppedElementType[]) => void;
   allPages: Page[];
+  isDarkTheme?: boolean;
+}
+
+export interface ToolboxItemProps {
+  type: string;
+  children: React.ReactNode;
+  description: string;
+  icon?: string;
+}
+
+export interface CategoryProps {
+  title: string;
+  children: React.ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+export interface ToolboxProps {
   isDarkTheme?: boolean;
 }
