@@ -1,18 +1,14 @@
 "use client";
 
-import React, { useRef } from "react";
+import React, { useRef, useCallback, useMemo } from "react";
 import { useDrag } from "react-dnd";
+import { throttle } from "lodash";
+
+import { DroppedElementType } from "@/types/types";
 
 interface DroppedElementProps {
-  element: {
-    id: number;
-    type: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    properties: { [key: string]: any };
-  };
+  element: DroppedElementType;
+  allElements: DroppedElementType[];
   onResize: (id: number, width: number, height: number) => void;
   onPropertiesChange: (
     id: number,
@@ -25,22 +21,47 @@ interface DroppedElementProps {
 
 const DroppedElement: React.FC<DroppedElementProps> = ({
   element,
+  allElements,
   onResize,
   onPropertiesChange,
   onSelect,
   isSelected,
   availablePages,
 }) => {
+  // We need to ensure the drag item always has the latest properties
+  // This function will be called when the drag starts
+  const getDragItem = useCallback(
+    () => ({
+      id: element.id,
+      type: element.type,
+      parentId: element.parentId,
+    }),
+    [element.id, element.type, element.parentId]
+  );
+
   const [{ isDragging }, drag] = useDrag(
     () => ({
       type: "element",
-      item: () => ({ id: element.id, type: element.type }),
+      item: getDragItem, // Use the function to get the latest values
       collect: (monitor) => ({
         isDragging: monitor.isDragging(),
       }),
+      // Add an end callback to ensure we clean up properly
+      end: (item, monitor) => {
+        if (!monitor.didDrop()) {
+          // If the drop was cancelled, we don't need to do anything
+          console.log("Drag cancelled");
+        }
+      },
     }),
-    [element.id]
+    [getDragItem]
   );
+
+  // Get child elements if this is a container - memoize to prevent unnecessary recalculations
+  const childElements = useMemo(() => {
+    if (!element.properties.canHaveChildren) return [];
+    return allElements.filter((el) => el.parentId === element.id);
+  }, [element.id, element.properties.canHaveChildren, allElements]);
 
   const resizeRef = useRef<{
     isResizing: boolean;
@@ -50,36 +71,70 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     startHeight: number;
   } | null>(null);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering onSelect
-    e.preventDefault();
-    resizeRef.current = {
-      isResizing: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      startWidth: element.width,
-      startHeight: element.height,
-    };
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
+  // Create throttled resize handler with both leading and trailing calls
+  const throttledResize = useCallback(
+    throttle(
+      (id: number, width: number, height: number) => {
+        onResize(id, width, height);
+      },
+      30,
+      { leading: true, trailing: true }
+    ),
+    [onResize]
+  );
 
-  const handleMouseMove = (e: MouseEvent) => {
+  // Use refs to avoid circular dependencies
+  const handleMouseMoveRef = useRef<(e: MouseEvent) => void>(() => {});
+  const handleMouseUpRef = useRef<() => void>(() => {});
+
+  // Create stable wrapper functions
+  const handleMouseMoveWrapper = useCallback((e: MouseEvent) => {
+    handleMouseMoveRef.current?.(e);
+  }, []);
+
+  const handleMouseUpWrapper = useCallback(() => {
+    handleMouseUpRef.current?.();
+  }, []);
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent triggering onSelect
+      e.preventDefault();
+      resizeRef.current = {
+        isResizing: true,
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: element.width,
+        startHeight: element.height,
+      };
+      document.addEventListener("mousemove", handleMouseMoveWrapper);
+      document.addEventListener("mouseup", handleMouseUpWrapper);
+    },
+    [
+      element.width,
+      element.height,
+      handleMouseMoveWrapper,
+      handleMouseUpWrapper,
+    ]
+  );
+
+  // Define the handlers
+  handleMouseMoveRef.current = (e: MouseEvent) => {
     if (resizeRef.current && resizeRef.current.isResizing) {
       const dx = e.clientX - resizeRef.current.startX;
       const dy = e.clientY - resizeRef.current.startY;
       const newWidth = Math.max(50, resizeRef.current.startWidth + dx);
       const newHeight = Math.max(30, resizeRef.current.startHeight + dy);
-      onResize(element.id, newWidth, newHeight);
+      throttledResize(element.id, newWidth, newHeight);
     }
   };
 
-  const handleMouseUp = () => {
+  handleMouseUpRef.current = () => {
     if (resizeRef.current) {
       resizeRef.current.isResizing = false;
     }
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
+    document.removeEventListener("mousemove", handleMouseMoveWrapper);
+    document.removeEventListener("mouseup", handleMouseUpWrapper);
   };
 
   const renderContent = () => {
@@ -208,12 +263,36 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               textAlign: element.properties.textAlign,
             }}
           >
-            {element.properties.level === "h1" && <h1 className="text-3xl font-bold">{element.properties.content}</h1>}
-            {element.properties.level === "h2" && <h2 className="text-2xl font-bold">{element.properties.content}</h2>}
-            {element.properties.level === "h3" && <h3 className="text-xl font-bold">{element.properties.content}</h3>}
-            {element.properties.level === "h4" && <h4 className="text-lg font-bold">{element.properties.content}</h4>}
-            {element.properties.level === "h5" && <h5 className="text-base font-bold">{element.properties.content}</h5>}
-            {element.properties.level === "h6" && <h6 className="text-sm font-bold">{element.properties.content}</h6>}
+            {element.properties.level === "h1" && (
+              <h1 className="text-3xl font-bold">
+                {element.properties.content}
+              </h1>
+            )}
+            {element.properties.level === "h2" && (
+              <h2 className="text-2xl font-bold">
+                {element.properties.content}
+              </h2>
+            )}
+            {element.properties.level === "h3" && (
+              <h3 className="text-xl font-bold">
+                {element.properties.content}
+              </h3>
+            )}
+            {element.properties.level === "h4" && (
+              <h4 className="text-lg font-bold">
+                {element.properties.content}
+              </h4>
+            )}
+            {element.properties.level === "h5" && (
+              <h5 className="text-base font-bold">
+                {element.properties.content}
+              </h5>
+            )}
+            {element.properties.level === "h6" && (
+              <h6 className="text-sm font-bold">
+                {element.properties.content}
+              </h6>
+            )}
           </div>
         );
       case "button":
@@ -303,7 +382,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       case "container":
         return (
           <div
-            className="w-full h-full p-4"
+            className="w-full h-full p-4 relative"
             style={{
               backgroundColor: element.properties.backgroundColor,
               padding: element.properties.padding,
@@ -313,7 +392,35 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               borderStyle: element.properties.borderStyle,
             }}
           >
-            <div className="text-center text-gray-400 text-xs">Container Element</div>
+            {childElements.length > 0 ? (
+              // Only render children that are actually visible (performance optimization)
+              childElements.map((child) => (
+                <div
+                  key={child.id}
+                  className="absolute"
+                  style={{
+                    left: child.x,
+                    top: child.y,
+                    width: child.width,
+                    height: child.height,
+                  }}
+                >
+                  <DroppedElement
+                    element={child}
+                    allElements={allElements}
+                    onResize={onResize}
+                    onPropertiesChange={onPropertiesChange}
+                    onSelect={() => {}}
+                    isSelected={false}
+                    availablePages={availablePages}
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 text-xs">
+                Container Element - Drop elements here
+              </div>
+            )}
           </div>
         );
       case "card":
@@ -361,13 +468,19 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
             }}
           >
             {element.properties.type === "ordered" ? (
-              <ol className="list-decimal pl-5" style={{ lineHeight: element.properties.spacing }}>
+              <ol
+                className="list-decimal pl-5"
+                style={{ lineHeight: element.properties.spacing }}
+              >
                 {element.properties.items.map((item: string, index: number) => (
                   <li key={index}>{item}</li>
                 ))}
               </ol>
             ) : (
-              <ul className="list-disc pl-5" style={{ lineHeight: element.properties.spacing }}>
+              <ul
+                className="list-disc pl-5"
+                style={{ lineHeight: element.properties.spacing }}
+              >
                 {element.properties.items.map((item: string, index: number) => (
                   <li key={index}>{item}</li>
                 ))}
@@ -390,7 +503,8 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
                   className="block mb-1 text-sm font-medium"
                   style={{ color: element.properties.labelColor }}
                 >
-                  {field.label} {field.required && <span className="text-red-500">*</span>}
+                  {field.label}{" "}
+                  {field.required && <span className="text-red-500">*</span>}
                 </label>
                 {field.type === "textarea" ? (
                   <textarea
@@ -429,7 +543,10 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               className="block mb-1 text-sm font-medium"
               style={{ color: element.properties.labelColor }}
             >
-              {element.properties.label} {element.properties.required && <span className="text-red-500">*</span>}
+              {element.properties.label}{" "}
+              {element.properties.required && (
+                <span className="text-red-500">*</span>
+              )}
             </label>
             <input
               type={element.properties.type}
@@ -476,13 +593,59 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
             </div>
           </div>
         );
+      case "div":
+        return (
+          <div
+            className="w-full h-full relative"
+            style={{
+              backgroundColor: element.properties.backgroundColor,
+              padding: element.properties.padding,
+              borderRadius: element.properties.borderRadius,
+              borderColor: element.properties.borderColor,
+              borderWidth: element.properties.borderWidth,
+              borderStyle: element.properties.borderStyle,
+            }}
+          >
+            {childElements.length > 0 ? (
+              // Only render children that are actually visible (performance optimization)
+              childElements.map((child) => (
+                <div
+                  key={child.id}
+                  className="absolute"
+                  style={{
+                    left: child.x,
+                    top: child.y,
+                    width: child.width,
+                    height: child.height,
+                  }}
+                >
+                  <DroppedElement
+                    element={child}
+                    allElements={allElements}
+                    onResize={onResize}
+                    onPropertiesChange={onPropertiesChange}
+                    onSelect={() => {}}
+                    isSelected={false}
+                    availablePages={availablePages}
+                  />
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 text-xs">
+                Div Element - Drop elements here
+              </div>
+            )}
+          </div>
+        );
       default:
         return <div>Unknown Element</div>;
     }
   };
 
   // Determine if this is a full-width element that should adapt to container width
-  const isFullWidthElement = ['header', 'footer', 'navbar', 'divider'].includes(element.type);
+  const isFullWidthElement = ["header", "footer", "navbar", "divider"].includes(
+    element.type
+  );
 
   // Calculate percentage width for responsive elements
   const getResponsiveStyles = () => {

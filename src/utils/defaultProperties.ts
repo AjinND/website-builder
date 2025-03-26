@@ -101,6 +101,7 @@ export const getDefaultProperties = (type: string) => {
         borderColor: "transparent",
         borderWidth: "0px",
         borderStyle: "solid",
+        canHaveChildren: true,
       };
     case "card":
       return {
@@ -113,6 +114,7 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#000000",
         borderRadius: "8px",
         boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+        canHaveChildren: true,
       };
     case "list":
       return {
@@ -163,6 +165,16 @@ export const getDefaultProperties = (type: string) => {
         name: "star", // icon name
         size: "24px",
         color: "#007bff",
+      };
+    case "div":
+      return {
+        backgroundColor: "transparent",
+        padding: "10px",
+        borderRadius: "0px",
+        borderColor: "#e0e0e0",
+        borderWidth: "1px",
+        borderStyle: "solid",
+        canHaveChildren: true,
       };
     default:
       return {};

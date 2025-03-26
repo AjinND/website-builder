@@ -46,7 +46,7 @@ export function generatePageJs(page: Page): string {
   const elementsMapping = page.elements
     .map((el) => JSON.stringify(el))
     .join(",\n  ");
-    
+
   return `
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +56,9 @@ import Jumbotron from '../components/Jumbotron';
 import TextBlock from '../components/TextBlock';
 import ButtonElement from '../components/ButtonElement';
 import ImageElement from '../components/ImageElement';
+import ContainerElement from '../components/ContainerElement';
+import DivElement from '../components/DivElement';
+import CardElement from '../components/CardElement';
 
 // Page elements data
 const elements = [
@@ -64,74 +67,232 @@ const elements = [
 
 function ${page.name.replace(/\s+/g, '')}() {
   const navigate = useNavigate();
-  
+
   // Function to handle navigation between pages
   const handleNavigation = (path) => {
     navigate(path);
   };
 
+  // Function to render an element and its children
+  const renderElement = (el, parentStyle = {}) => {
+    // Calculate absolute position if it's a child element
+    const style = {
+      position: 'absolute',
+      left: el.x,
+      top: el.y,
+      width: el.width,
+      height: el.height,
+      ...parentStyle
+    };
+
+    // Get child elements if any
+    const childElements = elements.filter(child => child.parentId === el.id);
+
+    switch(el.type) {
+      case 'header':
+        return <Header
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        />;
+      case 'navbar':
+        return <Navbar
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        />;
+      case 'jumbotron':
+        return <Jumbotron
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        />;
+      case 'text':
+        return <TextBlock
+          key={el.id}
+          style={style}
+          {...el.properties}
+        />;
+      case 'button':
+        return <ButtonElement
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        />;
+      case 'image':
+        return <ImageElement
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        />;
+      case 'container':
+        return <ContainerElement
+          key={el.id}
+          style={style}
+          {...el.properties}
+        >
+          {childElements.map(child => renderElement(child, { position: 'absolute' }))}
+        </ContainerElement>;
+      case 'div':
+        return <DivElement
+          key={el.id}
+          style={style}
+          {...el.properties}
+        >
+          {childElements.map(child => renderElement(child, { position: 'absolute' }))}
+        </DivElement>;
+      case 'card':
+        return <CardElement
+          key={el.id}
+          style={style}
+          {...el.properties}
+          onNavigate={handleNavigation}
+        >
+          {childElements.map(child => renderElement(child, { position: 'absolute' }))}
+        </CardElement>;
+      default:
+        return null;
+    }
+  };
+
+  // Only render top-level elements (those without a parent)
+  const topLevelElements = elements.filter(el => !el.parentId);
+
   return (
     <div className="relative w-full min-h-screen">
-      {elements.map(el => {
-        const style = { 
-          position: 'absolute',
-          left: el.x, 
-          top: el.y, 
-          width: el.width, 
-          height: el.height 
-        };
-        
-        switch(el.type) {
-          case 'header':
-            return <Header 
-              key={el.id} 
-              style={style} 
-              {...el.properties} 
-              onNavigate={handleNavigation}
-            />;
-          case 'navbar':
-            return <Navbar 
-              key={el.id} 
-              style={style} 
-              {...el.properties} 
-              onNavigate={handleNavigation}
-            />;
-          case 'jumbotron':
-            return <Jumbotron 
-              key={el.id} 
-              style={style} 
-              {...el.properties} 
-              onNavigate={handleNavigation}
-            />;
-          case 'text':
-            return <TextBlock 
-              key={el.id} 
-              style={style} 
-              {...el.properties}
-            />;
-          case 'button':
-            return <ButtonElement 
-              key={el.id} 
-              style={style} 
-              {...el.properties} 
-              onNavigate={handleNavigation}
-            />;
-          case 'image':
-            return <ImageElement 
-              key={el.id} 
-              style={style} 
-              {...el.properties} 
-              onNavigate={handleNavigation}
-            />;
-          default:
-            return null;
-        }
-      })}
+      {topLevelElements.map(el => renderElement(el))}
     </div>
   );
 }
 
 export default ${page.name.replace(/\s+/g, '')};
+  `.trim();
+}
+
+export function generateContainerElementJs(): string {
+  return `
+import React from 'react';
+
+function ContainerElement({ style, backgroundColor, padding, borderRadius, borderColor, borderWidth, borderStyle, children }) {
+  return (
+    <div
+      style={{
+        ...style,
+        backgroundColor,
+        padding,
+        borderRadius,
+        borderColor,
+        borderWidth,
+        borderStyle,
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+      className="container-element"
+    >
+      {children}
+    </div>
+  );
+}
+
+export default ContainerElement;
+  `.trim();
+}
+
+export function generateDivElementJs(): string {
+  return `
+import React from 'react';
+
+function DivElement({ style, backgroundColor, padding, borderRadius, borderColor, borderWidth, borderStyle, children }) {
+  return (
+    <div
+      style={{
+        ...style,
+        backgroundColor,
+        padding,
+        borderRadius,
+        borderColor,
+        borderWidth,
+        borderStyle,
+        position: 'relative',
+        overflow: 'hidden'
+      }}
+      className="div-element"
+    >
+      {children}
+    </div>
+  );
+}
+
+export default DivElement;
+  `.trim();
+}
+
+export function generateCardElementJs(): string {
+  return `
+import React from 'react';
+
+function CardElement({ style, title, content, imageUrl, buttonText, buttonUrl, backgroundColor, textColor, borderRadius, boxShadow, children, onNavigate }) {
+  const handleButtonClick = () => {
+    if (buttonUrl && buttonUrl.startsWith('/')) {
+      onNavigate(buttonUrl);
+    } else if (buttonUrl) {
+      window.open(buttonUrl, '_blank');
+    }
+  };
+
+  return (
+    <div
+      style={{
+        ...style,
+        backgroundColor,
+        color: textColor,
+        borderRadius,
+        boxShadow,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        position: 'relative'
+      }}
+      className="card-element"
+    >
+      {imageUrl && (
+        <img
+          src={imageUrl}
+          alt="Card image"
+          style={{ width: '100%', height: '120px', objectFit: 'cover' }}
+        />
+      )}
+      <div style={{ padding: '16px', flex: 1 }}>
+        <h3 style={{ fontWeight: 'bold', marginBottom: '8px' }}>{title}</h3>
+        <p style={{ fontSize: '14px', marginBottom: '16px' }}>{content}</p>
+        {buttonText && (
+          <button
+            onClick={handleButtonClick}
+            style={{
+              backgroundColor: '#007bff',
+              color: '#ffffff',
+              padding: '4px 12px',
+              borderRadius: '4px',
+              fontSize: '14px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {buttonText}
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export default CardElement;
   `.trim();
 }
 

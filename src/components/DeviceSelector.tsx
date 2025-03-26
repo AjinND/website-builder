@@ -1,10 +1,5 @@
+import { DeviceSelectorProps } from "@/types/types";
 import React, { useState } from "react";
-
-interface DeviceSelectorProps {
-  device: { width: number; height: number; name: string };
-  setDevice: (device: { width: number; height: number; name: string }) => void;
-  isDarkTheme?: boolean;
-}
 
 // Expanded device list with more options
 const devices = [
@@ -73,7 +68,7 @@ export default function DeviceSelector({
           <span className="ml-2">{showDeviceMenu ? "▲" : "▼"}</span>
         </button>
 
-        <button
+        {/* <button
           onClick={() => {
             // Toggle orientation by swapping width and height
             setDevice({
@@ -90,12 +85,12 @@ export default function DeviceSelector({
           title="Rotate device"
         >
           🔄
-        </button>
+        </button> */}
       </div>
 
       {showDeviceMenu && (
         <div
-          className={`absolute z-10 mt-1 w-64 rounded-md shadow-lg ${
+          className={`absolute z-50 mt-1 w-64 rounded-md shadow-lg ${
             isDarkTheme ? "bg-gray-800" : "bg-white border border-gray-200"
           }`}
         >

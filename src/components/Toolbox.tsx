@@ -1,23 +1,20 @@
 "use client";
 
+import { CategoryProps, ToolboxItemProps, ToolboxProps } from "@/types/types";
 import React, { useState, useRef, useEffect } from "react";
 import { useDrag } from "react-dnd";
 import { createPortal } from "react-dom";
 
-interface ToolboxItemProps {
-  type: string;
-  children: React.ReactNode;
-  description: string;
-  icon?: string;
-}
-
-const ToolboxItem: React.FC<ToolboxItemProps> = ({ type, children, description, icon }) => {
+const ToolboxItem: React.FC<ToolboxItemProps> = ({
+  type,
+  children,
+  description,
+  icon,
+}) => {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: "element",
     item: { type },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
+    collect: (monitor) => ({ isDragging: !!monitor.isDragging() }),
   }));
 
   return (
@@ -36,14 +33,12 @@ const ToolboxItem: React.FC<ToolboxItemProps> = ({ type, children, description, 
   );
 };
 
-interface CategoryProps {
-  title: string;
-  children: React.ReactNode;
-  isOpen: boolean;
-  onToggle: () => void;
-}
-
-const Category: React.FC<CategoryProps> = ({ title, children, isOpen, onToggle }) => {
+const Category: React.FC<CategoryProps> = ({
+  title,
+  children,
+  isOpen,
+  onToggle,
+}) => {
   return (
     <div className="mb-4">
       <div
@@ -51,24 +46,50 @@ const Category: React.FC<CategoryProps> = ({ title, children, isOpen, onToggle }
         onClick={onToggle}
       >
         <h4 className="text-sm font-semibold">{title}</h4>
-        <span>{isOpen ? '▼' : '►'}</span>
+        <span>{isOpen ? "▼" : "►"}</span>
       </div>
       {isOpen && <div className="mt-2">{children}</div>}
     </div>
   );
 };
 
-interface ToolboxProps {
-  isDarkTheme?: boolean;
-}
-
 export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
+  // Visibility and minimization state
   const [isOpen, setIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [position, setPosition] = useState({ x: 20, y: 20 });
+  const [position, setPosition] = useState({ x: 0, y: 175 });
   const [isDraggingToolbox, setIsDraggingToolbox] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [dockPosition, setDockPosition] = useState<'left' | 'right'>('left');
+  const [dockPosition, setDockPosition] = useState<"left" | "right">("left");
+
+  // Handlers for toggling visibility and minimization
+  const handleToggleOpen = () => {
+    setIsOpen((prev) => {
+      if (!prev) {
+        setIsMinimized(false);
+      }
+      return !prev;
+    });
+  };
+
+  const handleMinimize = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMinimized((prev) => !prev);
+  };
+
+  const toggleDockPosition = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (dockPosition === "left") {
+      setDockPosition("right");
+      setPosition({
+        ...position,
+        x: window.innerWidth - (toolboxRef.current?.offsetWidth || 300) - 20,
+      });
+    } else {
+      setDockPosition("left");
+      setPosition({ ...position, x: 20 });
+    }
+  };
 
   const toolboxRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -93,11 +114,8 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
       if (isDraggingToolbox && headerRef.current) {
         const newX = e.clientX - dragOffset.x;
         const newY = e.clientY - dragOffset.y;
-
-        // Keep toolbox within viewport
         const maxX = window.innerWidth - (toolboxRef.current?.offsetWidth || 300);
         const maxY = window.innerHeight - (headerRef.current?.offsetHeight || 40);
-
         setPosition({
           x: Math.max(0, Math.min(newX, maxX)),
           y: Math.max(0, Math.min(newY, maxY)),
@@ -110,15 +128,18 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
     };
 
     if (isDraggingToolbox) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
     }
-
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDraggingToolbox, dragOffset]);
+
+  useEffect(() => {
+    setPosition({ x: 0, y: 175 });
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (headerRef.current && toolboxRef.current) {
@@ -130,81 +151,74 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
     }
   };
 
-  const toggleDockPosition = () => {
-    setDockPosition(dockPosition === 'left' ? 'right' : 'left');
-    // Adjust position when changing dock
-    if (dockPosition === 'left') {
-      setPosition({ ...position, x: window.innerWidth - (toolboxRef.current?.offsetWidth || 300) - 20 });
-    } else {
-      setPosition({ ...position, x: 20 });
-    }
-  };
-
-  // Toolbox toggle button that's always visible
+  // Vertical sticky toolbox toggle button
   const ToolboxToggleButton = () => (
-    <button
-      onClick={() => setIsOpen(!isOpen)}
-      className={`fixed z-50 p-3 rounded-full shadow-lg ${
-        isDarkTheme
-          ? 'bg-gray-800 text-white hover:bg-gray-700'
-          : 'bg-white text-gray-800 hover:bg-gray-100 border border-gray-300'
+    <div
+      onClick={handleToggleOpen}
+      className={`fixed z-50 shadow-lg flex items-center justify-center cursor-pointer ${
+        isDarkTheme ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-white text-gray-800 hover:bg-gray-100 border border-gray-300"
       }`}
       style={{
-        bottom: '20px',
-        [dockPosition]: '20px',
+        top: "50%",
+        transform: "translateY(-50%)",
+        [dockPosition]: "0",
+        width: "40px",
+        height: "120px",
+        borderRadius: dockPosition === "left" ? "0 8px 8px 0" : "8px 0 0 8px",
       }}
+      title={isOpen ? "Close Toolbox" : "Open Toolbox"}
     >
-      {isOpen ? '🔧' : '🧰'}
-    </button>
+      <div
+        className="vertical-text"
+        style={{
+          writingMode: "vertical-rl",
+          textOrientation: "mixed",
+          transform: "rotate(180deg)",
+        }}
+      >
+        Tool Box {isOpen ? "◀" : "▶"}
+      </div>
+    </div>
   );
 
-  // Render the toolbox modal
+  // Toolbox modal content
   const ToolboxModal = () => {
     if (!isOpen) return null;
 
     return (
       <div
         ref={toolboxRef}
-        className={`fixed z-40 rounded-lg shadow-xl overflow-hidden ${
-          isDarkTheme ? 'bg-gray-800 text-white' : 'bg-white text-gray-800 border border-gray-300'
-        } ${isMinimized ? 'w-auto' : 'w-64'}`}
-        style={{
-          top: `${position.y}px`,
-          left: `${position.x}px`,
-          transition: isDraggingToolbox ? 'none' : 'all 0.2s ease',
-        }}
+        className={`fixed z-40 rounded-lg shadow-xl overflow-hidden transition-all duration-200 ${
+          isDarkTheme ? "bg-gray-800 text-white" : "bg-white text-gray-800 border border-gray-300"
+        } ${isMinimized ? "w-16" : "w-64"}`}
+        style={{ top: `${position.y}px`, left: `${position.x}px` }}
       >
-        {/* Toolbox header - draggable */}
+        {/* Toolbox header */}
         <div
           ref={headerRef}
-          className={`p-2 ${isDarkTheme ? 'bg-gray-700' : 'bg-gray-100'} cursor-move flex justify-between items-center`}
+          className={`p-2 ${isDarkTheme ? "bg-gray-700" : "bg-gray-100"} flex ${
+            isMinimized ? "flex-col items-center" : "justify-between items-center"
+          } cursor-move`}
           onMouseDown={handleMouseDown}
         >
-          <div className="flex items-center">
+          <div className={`flex ${isMinimized ? "flex-col" : "items-center"}`}>
             <span className="mr-2">🧰</span>
             {!isMinimized && <h3 className="text-sm font-semibold">Toolbox</h3>}
           </div>
-          <div className="flex space-x-1">
+          <div className={`flex ${isMinimized ? "flex-col" : "space-x-1"}`}>
             <button
               onClick={toggleDockPosition}
-              className={`p-1 rounded ${isDarkTheme ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
-              title={`Dock to ${dockPosition === 'left' ? 'right' : 'left'}`}
+              title={`Dock to ${dockPosition === "left" ? "right" : "left"}`}
+              className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
             >
-              {dockPosition === 'left' ? '⬅️' : '➡️'}
+              {dockPosition === "left" ? "⬅️" : "➡️"}
             </button>
             <button
-              onClick={() => setIsMinimized(!isMinimized)}
-              className={`p-1 rounded ${isDarkTheme ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
-              title={isMinimized ? 'Expand' : 'Minimize'}
+              onClick={handleMinimize}
+              title={isMinimized ? "Expand" : "Minimize"}
+              className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
             >
-              {isMinimized ? '📋' : '➖'}
-            </button>
-            <button
-              onClick={() => setIsOpen(false)}
-              className={`p-1 rounded ${isDarkTheme ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`}
-              title="Close"
-            >
-              ✖️
+              {isMinimized ? "📋" : "➖"}
             </button>
           </div>
         </div>
@@ -219,7 +233,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
             <Category
               title="Layout Elements"
               isOpen={openCategories.layout}
-              onToggle={() => toggleCategory('layout')}
+              onToggle={() => toggleCategory("layout")}
             >
               <ToolboxItem
                 type="header"
@@ -228,7 +242,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Header
               </ToolboxItem>
-
               <ToolboxItem
                 type="navbar"
                 description="Navigation menu for your website"
@@ -236,7 +249,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Navbar
               </ToolboxItem>
-
               <ToolboxItem
                 type="jumbotron"
                 description="Hero section with heading, text and call to action"
@@ -244,7 +256,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Jumbotron
               </ToolboxItem>
-
               <ToolboxItem
                 type="footer"
                 description="Page footer with links and copyright information"
@@ -252,7 +263,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Footer
               </ToolboxItem>
-
               <ToolboxItem
                 type="divider"
                 description="Horizontal divider to separate content sections"
@@ -260,7 +270,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Divider
               </ToolboxItem>
-
               <ToolboxItem
                 type="container"
                 description="Container to group and organize elements"
@@ -273,7 +282,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
             <Category
               title="Content Elements"
               isOpen={openCategories.content}
-              onToggle={() => toggleCategory('content')}
+              onToggle={() => toggleCategory("content")}
             >
               <ToolboxItem
                 type="text"
@@ -282,7 +291,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Text
               </ToolboxItem>
-
               <ToolboxItem
                 type="heading"
                 description="Section heading with customizable size"
@@ -290,7 +298,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Heading
               </ToolboxItem>
-
               <ToolboxItem
                 type="card"
                 description="Card with title, content and optional image"
@@ -298,7 +305,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Card
               </ToolboxItem>
-
               <ToolboxItem
                 type="list"
                 description="Ordered or unordered list of items"
@@ -311,7 +317,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
             <Category
               title="Interactive Elements"
               isOpen={openCategories.interactive}
-              onToggle={() => toggleCategory('interactive')}
+              onToggle={() => toggleCategory("interactive")}
             >
               <ToolboxItem
                 type="button"
@@ -320,7 +326,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Button
               </ToolboxItem>
-
               <ToolboxItem
                 type="form"
                 description="Input form with customizable fields"
@@ -328,7 +333,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Form
               </ToolboxItem>
-
               <ToolboxItem
                 type="input"
                 description="Text input field"
@@ -341,7 +345,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
             <Category
               title="Media Elements"
               isOpen={openCategories.media}
-              onToggle={() => toggleCategory('media')}
+              onToggle={() => toggleCategory("media")}
             >
               <ToolboxItem
                 type="image"
@@ -350,7 +354,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Image
               </ToolboxItem>
-
               <ToolboxItem
                 type="video"
                 description="Embedded video player"
@@ -358,7 +361,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               >
                 Video
               </ToolboxItem>
-
               <ToolboxItem
                 type="icon"
                 description="Icon with customizable style"
@@ -387,7 +389,6 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
   // Use createPortal to render the toolbox at the document body level
   // We need to handle client-side rendering properly to avoid hydration errors
   const [isMounted, setIsMounted] = useState(false);
-
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -395,10 +396,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
   return (
     <>
       <ToolboxToggleButton />
-      {isMounted && createPortal(
-        <ToolboxModal />,
-        document.body
-      )}
+      {isMounted && createPortal(<ToolboxModal />, document.body)}
     </>
   );
 }

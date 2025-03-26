@@ -64,7 +64,7 @@ export default function FrameworkSelector({
 
       {isOpen && (
         <div
-          className={`absolute z-10 mt-1 w-64 rounded-md shadow-lg ${
+          className={`absolute z-50 mt-1 w-64 rounded-md shadow-lg ${
             isDarkTheme ? "bg-gray-800" : "bg-white border border-gray-200"
           }`}
         >
