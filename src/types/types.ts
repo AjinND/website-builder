@@ -6,6 +6,8 @@ export interface DroppedElementType {
   width: number;
   height: number;
   properties: { [key: string]: any };
+  parentId?: number | null;
+  children?: number[];
 }
 
 export interface StyleEditorProps {

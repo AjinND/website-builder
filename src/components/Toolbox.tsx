@@ -386,6 +386,8 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
     );
   };
 
+  // Use createPortal to render the toolbox at the document body level
+  // We need to handle client-side rendering properly to avoid hydration errors
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
     setIsMounted(true);
