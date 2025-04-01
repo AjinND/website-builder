@@ -1,21 +1,30 @@
 # Website Builder
 
-A drag-and-drop website builder that helps you design and generate code for web applications across multiple frameworks.
+A powerful drag-and-drop website builder that helps you design and generate code for web applications across multiple frameworks.
 
 ## Overview
 
-Website Builder is a powerful visual development tool that allows you to design websites through an intuitive drag-and-drop interface. Once your design is complete, you can generate all the necessary code files for your project in your chosen framework.
+Website Builder is a modern visual development tool that allows you to design websites through an intuitive drag-and-drop interface. Once your design is complete, you can generate all the necessary code files for your project in your chosen framework.
 
 ![Website Builder Screenshot](./public/screenshot/website-builder.png)
+
 ## Features
 
 - **Visual Drag-and-Drop Interface**: Design your website without writing code
-- **Multi-Page Support**: Create and manage multiple pages for your website
-- **Component Library**: Pre-built components including headers, navbars, jumbotrons, text blocks, buttons, and images
+- **Multi-Page Support**: Create, rename, duplicate, and manage multiple pages for your website
+- **Responsive Design**: Preview and optimize your design for different device sizes (Desktop, Laptop, Tablet, Mobile)
+- **Nested Components**: Add components inside containers for complex layouts
+- **Dark/Light Theme**: Switch between dark and light themes for the editor interface
+- **Extensive Component Library**: Pre-built components including:
+  - Layout elements (Header, Navbar, Jumbotron, Footer, Divider, Container)
+  - Content elements (Text, Heading, Card, List)
+  - Interactive elements (Button, Form, Input)
+  - Media elements (Image, Video, Icon)
 - **Framework Selection**: Generate code for different frameworks (React fully supported, Angular and Vue coming soon)
 - **Code Generation**: Download a complete, ready-to-run project with all necessary files
-- **Property Customization**: Fine-tune the appearance and behavior of each component
+- **Detailed Property Customization**: Fine-tune the appearance and behavior of each component
 - **Page Navigation**: Link components to navigate between pages
+- **Movable Toolbox**: Drag the toolbox anywhere on the screen or dock it to either side
 
 ## Supported Frameworks
 
@@ -62,6 +71,7 @@ yarn dev
    - Drag elements from the toolbox onto the canvas
    - Click on elements to edit their properties in the style editor
    - Add multiple pages using the + button in the page tabs
+   - Rename, duplicate, or delete pages as needed
    - Set up navigation between pages
 4. **Generate Code**: Click the "Generate Code" button to download a zip file with all your project files
 5. **Run Your Project**: Extract the zip file and follow the instructions in the generated README to run your project locally
@@ -70,12 +80,29 @@ yarn dev
 
 ### Available Components
 
+#### Layout Elements
 - **Header**: Page header with logo and navigation links
 - **Navbar**: Navigation menu for your website
 - **Jumbotron**: Hero section with heading, text, and call to action
+- **Footer**: Page footer with links and copyright information
+- **Divider**: Horizontal divider to separate content sections
+- **Container**: Container to group and organize elements
+
+#### Content Elements
 - **Text**: Simple text content blocks
-- **Button**: Clickable buttons with customizable actions
-- **Image**: Image elements with optional links
+- **Heading**: Section heading with customizable size
+- **Card**: Card with title, content, and optional image
+- **List**: Ordered or unordered list of items
+
+#### Interactive Elements
+- **Button**: Clickable buttons with customizable action
+- **Form**: Input form with customizable fields
+- **Input**: Text input field
+
+#### Media Elements
+- **Image**: Image element with optional link
+- **Video**: Embedded video player
+- **Icon**: Icon with customizable style
 
 ### Editing Components
 
@@ -84,7 +111,14 @@ yarn dev
    - Change text content, colors, and font styles
    - Set up links to other pages or external URLs
    - Customize component-specific properties
-   - (more features to be added)
+   - Adjust positioning and sizing
+
+### Working with Containers
+
+1. Drag a container element onto the canvas
+2. Drag other elements into the container
+3. Elements inside containers can be positioned relative to the container
+4. Containers can be resized to accommodate their contents
 
 ## Generated Project Structure
 
@@ -108,7 +142,11 @@ my-react-app/
     │   ├── Jumbotron.js
     │   ├── TextBlock.js
     │   ├── ButtonElement.js
-    │   └── ImageElement.js
+    │   ├── ImageElement.js
+    │   ├── ContainerElement.js
+    │   ├── DivElement.js
+    │   ├── CardElement.js
+    │   └── [Other Components].js
     └── pages/
         ├── Home.js
         └── [OtherPages].js
@@ -138,10 +176,14 @@ yarn start
 
 This project was built using:
 
-- [Next.js](https://nextjs.org/) - React framework
+- [Next.js 15](https://nextjs.org/) - React framework
+- [React 19](https://react.dev/) - UI library
 - [React DnD](https://react-dnd.github.io/react-dnd/) - Drag and drop for React
-- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+- [Tailwind CSS 4](https://tailwindcss.com/) - Utility-first CSS framework
 - [JSZip](https://stuk.github.io/jszip/) - JavaScript library for creating zip files
+- [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
+- [Lodash](https://lodash.com/) - Utility library
+- [OpenAI API](https://openai.com/) - For AI-assisted features
 
 ## Contributing
 
@@ -157,9 +199,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - Full support for React, Angular and Vue frameworks
 - Implement fully responsive design
-- Additional components (forms, cards, carousels, etc.)
+- Additional components (carousels, tabs, accordions, etc.)
 - Custom CSS editor
 - Template library
-- Integrate AI for code generation
+- Enhance AI integration for code generation and design assistance
 - Collaborative editing
-- Real-Time preview to see your changes instantly as you build.
+- Real-Time preview to see your changes instantly as you build
+- Component reuse across pages

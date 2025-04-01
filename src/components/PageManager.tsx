@@ -82,12 +82,12 @@ export default function PageManager() {
 
   // Function to update elements for the current page
   const updatePageElements = useCallback((elements: any[]) => {
-    setPages(
-      pages.map((page) =>
+    setPages((prevPages) =>
+      prevPages.map((page) =>
         page.id === currentPageId ? { ...page, elements } : page
       )
     );
-  }, [pages, currentPageId]);
+  }, [currentPageId]); // Only depend on currentPageId, not pages
 
   // Toggle theme
   const toggleTheme = () => {

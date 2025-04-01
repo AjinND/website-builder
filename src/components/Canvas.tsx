@@ -7,6 +7,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import DroppedElement from "./DroppedElement";
 import StyleEditor from "./StyleEditor";
+import ElementPathBreadcrumb from "./ElementPathBreadcrumb";
 import { getDefaultProperties } from "@/utils/defaultProperties";
 import {
   generateIndexJs,
@@ -192,45 +193,71 @@ export default function Canvas({
     [updateElements, device.width, device.height, extraHeight, isContainer]
   );
 
-  // Create a debounced version of the element update function
-  // Using debounce with a trailing call ensures the last update is always applied
-  const throttledUpdateElements = useCallback(
-    throttle(
+  // Create a throttled version of the element update function using useRef to avoid recreation
+  const throttledUpdateElementsRef = useRef<Function | null>(null);
+
+  // Initialize the throttled function once
+  useEffect(() => {
+    throttledUpdateElementsRef.current = throttle(
       (newElements: DroppedElementType[]) => {
         safeUpdateElements([...newElements]); // Create a new array to ensure React detects the change
       },
       30,
       { leading: true, trailing: true }
-    ), // Use both leading and trailing calls
-    [safeUpdateElements]
-  );
+    );
+
+    // Cleanup function to cancel any pending throttled calls
+    return () => {
+      if (throttledUpdateElementsRef.current && 'cancel' in throttledUpdateElementsRef.current) {
+        (throttledUpdateElementsRef.current as any).cancel();
+      }
+    };
+  }, [safeUpdateElements]);
+
+  // Wrapper function to use the ref
+  const throttledUpdateElements = useCallback((newElements: DroppedElementType[]) => {
+    if (throttledUpdateElementsRef.current) {
+      throttledUpdateElementsRef.current(newElements);
+    }
+  }, []);
 
   // Function to find if the drop position is inside a container element
-  // const findContainerAtPosition = useCallback((x: number, y: number) => {
-  //   // Reverse to check from top to bottom in z-index
-  //   return [...elements].reverse().find(el => {
-  //     if (!isContainer(el)) return false;
-
-  //     return (
-  //       x >= el.x &&
-  //       x <= el.x + el.width &&
-  //       y >= el.y &&
-  //       y <= el.y + el.height
-  //     );
-  //   });
-  // }, [elements, isContainer]);
   const findContainerAtPosition = useCallback(
     (x: number, y: number) => {
+      // Debug info
+      console.log(`Finding container at position x: ${x}, y: ${y}`);
+
       let candidates: { el: DroppedElementType; depth: number }[] = [];
+
       elements.forEach((el) => {
         if (isContainer(el)) {
           const { absX, absY } = getAbsolutePosition(el, elements);
+
+          // Parse padding value - default to 20px if not specified or if parsing fails
+          const paddingStr = el.properties.padding || "20px";
+          let padding = 20; // Default padding in pixels
+
+          // Try to parse the padding value
+          if (typeof paddingStr === 'string') {
+            const match = paddingStr.match(/^(\d+)(?:px)?$/);
+            if (match) {
+              padding = parseInt(match[1], 10);
+            }
+          } else if (typeof paddingStr === 'number') {
+            padding = paddingStr;
+          }
+
+          // Calculate the inner area of the container (accounting for padding)
           const bbox = {
             left: absX,
             top: absY,
             right: absX + el.width,
             bottom: absY + el.height,
           };
+
+          // Debug info for each container
+          console.log(`Container ${el.id} bbox:`, bbox);
+
           if (
             x >= bbox.left &&
             x <= bbox.right &&
@@ -239,25 +266,53 @@ export default function Canvas({
           ) {
             const depth = getDepth(el, elements);
             candidates.push({ el, depth });
+            console.log(`Container ${el.id} is a candidate with depth ${depth}`);
           }
         }
       });
-      if (candidates.length === 0) return null;
-      const maxDepthCandidate = candidates.reduce((prev, current) =>
-        prev.depth > current.depth ? prev : current
-      );
-      return maxDepthCandidate.el;
+
+      if (candidates.length === 0) {
+        console.log("No container found at position");
+        return null;
+      }
+
+      // Sort candidates by depth (highest depth first)
+      candidates.sort((a, b) => b.depth - a.depth);
+
+      // Get the container with the highest depth (most nested)
+      const selectedContainer = candidates[0].el;
+      console.log(`Selected container ${selectedContainer.id} with depth ${candidates[0].depth}`);
+
+      return selectedContainer;
     },
     [elements, isContainer]
   );
 
   const deleteElement = useCallback(
     (id: number) => {
-      const updatedElements = elements.filter((el) => el.id !== id);
+      // First, find all child elements that need to be deleted
+      const childIds = new Set<number>();
+      
+      const findAllChildren = (parentId: number) => {
+        elements.forEach(el => {
+          if (el.parentId === parentId) {
+            childIds.add(el.id);
+            findAllChildren(el.id); // Recursively find children of children
+          }
+        });
+      };
+      
+      findAllChildren(id);
+      
+      // Delete the element and all its children
+      const updatedElements = elements.filter(
+        el => el.id !== id && !childIds.has(el.id)
+      );
+      
       throttledUpdateElements(updatedElements);
       setSelectedElementId(null);
     },
-    [elements, throttledUpdateElements, setSelectedElementId]
+    [elements, throttledUpdateElements]
   );
 
   const duplicateElement = useCallback(
@@ -332,13 +387,59 @@ export default function Canvas({
         const parentId = containerElement ? containerElement.id : null;
 
         if (item.id !== undefined) {
+          console.log(`Moving existing element ${item.id}`);
+
           // Moving an existing element
           // First, create a copy of the elements array
           let updatedElements = currentElements.map((el) => {
             if (el.id === item.id) {
-              // If moving to a new parent, adjust coordinates to be relative to parent
-              const newX = parentId ? x - (containerElement?.x || 0) : x;
-              const newY = parentId ? y - (containerElement?.y || 0) : y;
+              // Get the element being moved
+              const movingElement = currentElements.find(e => e.id === item.id);
+              if (!movingElement) return el;
+
+              let newX, newY;
+
+              // If moving to a container, calculate position relative to container
+              if (parentId && containerElement) {
+                console.log(`Moving to container ${parentId}`);
+
+                // Get the absolute position of the container
+                const { absX, absY } = getAbsolutePosition(containerElement, currentElements);
+                console.log(`Container absolute position: x=${absX}, y=${absY}`);
+
+                // Parse padding value
+                const paddingStr = containerElement.properties.padding || "20px";
+                let padding = 20; // Default padding in pixels
+
+                // Try to parse the padding value
+                if (typeof paddingStr === 'string') {
+                  const match = paddingStr.match(/^(\d+)(?:px)?$/);
+                  if (match) {
+                    padding = parseInt(match[1], 10);
+                  }
+                } else if (typeof paddingStr === 'number') {
+                  padding = paddingStr;
+                }
+
+                // Calculate position relative to the container's content area
+                newX = x - absX;
+                newY = y - absY;
+
+                // Center the element at the drop position
+                newX -= movingElement.width / 2;
+                newY -= movingElement.height / 2;
+
+                // Ensure the element is not positioned outside the parent's boundaries
+                newX = Math.max(padding, Math.min(newX, containerElement.width - movingElement.width - padding));
+                newY = Math.max(padding, Math.min(newY, containerElement.height - movingElement.height - padding));
+
+                console.log(`Final relative position: x=${newX}, y=${newY}`);
+              } else {
+                // For top-level elements
+                newX = x - movingElement.width / 2;
+                newY = y - movingElement.height / 2;
+                console.log(`Top-level element position: x=${newX}, y=${newY}`);
+              }
 
               return {
                 ...el,
@@ -430,12 +531,49 @@ export default function Canvas({
 
           // If dropping inside a container, adjust coordinates to be relative to parent
           let newX, newY;
-          if (parentId) {
-            newX = x - (containerElement?.x || 0) - width / 2;
-            newY = y - (containerElement?.y || 0) - height / 2;
+          if (parentId && containerElement) {
+            console.log(`Dropping inside container ${parentId}`);
+
+            // Get the absolute position of the container
+            const { absX, absY } = getAbsolutePosition(containerElement, elements);
+            console.log(`Container absolute position: x=${absX}, y=${absY}`);
+
+            // Parse padding value - default to 20px if not specified or if parsing fails
+            const paddingStr = containerElement.properties.padding || "20px";
+            let padding = 20; // Default padding in pixels
+
+            // Try to parse the padding value
+            if (typeof paddingStr === 'string') {
+              const match = paddingStr.match(/^(\d+)(?:px)?$/);
+              if (match) {
+                padding = parseInt(match[1], 10);
+              }
+            } else if (typeof paddingStr === 'number') {
+              padding = paddingStr;
+            }
+
+            console.log(`Container padding: ${padding}px`);
+
+            // Calculate position relative to the container's content area
+            newX = x - absX;
+            newY = y - absY;
+
+            console.log(`Initial relative position: x=${newX}, y=${newY}`);
+
+            // Center the element at the drop position
+            newX -= width / 2;
+            newY -= height / 2;
+
+            // Ensure the element is not positioned outside the parent's boundaries
+            newX = Math.max(padding, Math.min(newX, containerElement.width - width - padding));
+            newY = Math.max(padding, Math.min(newY, containerElement.height - height - padding));
+
+            console.log(`Final relative position: x=${newX}, y=${newY}`);
           } else {
+            // For top-level elements
             newX = x - width / 2;
             newY = y - height / 2;
+            console.log(`Top-level element position: x=${newX}, y=${newY}`);
           }
 
           // Create the new element
@@ -467,8 +605,11 @@ export default function Canvas({
             });
           }
 
-          // Apply the update
+          // Apply the updates
           throttledUpdateElements(newElements);
+
+          // Select the new element
+          setSelectedElementId(newId);
         }
       },
       collect: (monitor) => ({
@@ -477,125 +618,125 @@ export default function Canvas({
     }),
     [
       elements,
-      device,
-      extraHeight,
       throttledUpdateElements,
       findContainerAtPosition,
+      device.width,
       scaleFactor,
     ]
   );
 
-  const serializePageData = (page: (typeof allPages)[0]) => {
-    return {
-      components: page.elements.map((el) => ({
-        id: el.id,
-        type: el.type,
-        position: { x: el.x, y: el.y },
-        size: { width: el.width, height: el.height },
-        styles: el.properties,
-      })),
-    };
-  };
+  // Get the currently selected element
+  const selectedElement = elements.find((el) => el.id === selectedElementId);
 
+  // Function to generate code for the current design
   const generateCode = async () => {
     setIsGenerating(true);
+
     try {
-      const generatedPages = await Promise.all(
-        allPages.map(async (page) => {
-          const jsonData = serializePageData(page);
-          console.log("JSON Data ---> ", jsonData.components);
-          const response = await fetch("/api/generate-code", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ jsonData }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to generate code for page: ${page.name}`);
-          }
-
-          const data = await response.json();
-          console.log("Generated Data ---> ", data.generatedCode);
-          return { name: page.name, code: data.generatedCode };
-        })
-      );
-
       const zip = new JSZip();
 
-      // Add boilerplate files
-      zip.file("src/index.js", generateIndexJs());
-      zip.file("src/index.css", generateIndexCss());
-      zip.file("public/index.html", generateIndexHtml());
-      zip.file("tailwind.config.js", generateTailwindConfig());
-      zip.file("postcss.config.js", generatePostCssConfig());
-      zip.file("package.json", generateReactPackageJson());
+      // Create the basic file structure based on the framework
+      if (framework === "react") {
+        // Create public directory
+        const publicDir = zip.folder("public");
+        publicDir?.file("index.html", generateIndexHtml());
 
-      // Add component files
-      const componentsFolder = zip.folder("src/components");
-      componentsFolder?.file(
-        "ContainerElement.js",
-        generateContainerElementJs()
-      );
-      componentsFolder?.file("DivElement.js", generateDivElementJs());
-      componentsFolder?.file("CardElement.js", generateCardElementJs());
+        // Create src directory
+        const srcDir = zip.folder("src");
+        srcDir?.file("index.js", generateIndexJs());
+        srcDir?.file("index.css", generateIndexCss());
 
-      // Add router setup
-      zip.file("src/AppRouter.js", generateAppRouterJs(allPages));
+        // Create components directory
+        const componentsDir = srcDir?.folder("components");
 
-      // Add AI-generated page files
-      const pagesFolder = zip.folder("src/pages");
-      generatedPages.forEach(({ name, code }) => {
-        const fileName = `${name.replace(/\s+/g, "").toLowerCase()}.js`;
-        pagesFolder?.file(fileName, code);
-      });
+        // Generate component files for each element
+        elements.forEach((element) => {
+          if (element.type === "container") {
+            componentsDir?.file(
+              "ContainerElement.js",
+              generateContainerElementJs()
+            );
+          } else if (element.type === "div") {
+            componentsDir?.file("DivElement.js", generateDivElementJs());
+          } else if (element.type === "card") {
+            componentsDir?.file("CardElement.js", generateCardElementJs());
+          }
+          // Add more element types as needed
+        });
 
-      // Generate and download ZIP
+        // Add package.json
+        zip.file("package.json", generateReactPackageJson());
+
+        // Add Tailwind config
+        zip.file("tailwind.config.js", generateTailwindConfig());
+        zip.file("postcss.config.js", generatePostCssConfig());
+      } else if (framework === "next") {
+        // Create app directory structure for Next.js
+        const appDir = zip.folder("app");
+        appDir?.file("page.js", generateAppRouterJs(elements));
+        appDir?.file("layout.js", `
+          export default function RootLayout({ children }) {
+            return (
+              <html lang="en">
+                <body>{children}</body>
+              </html>
+            );
+          }
+        `);
+
+        // Add package.json for Next.js
+        zip.file(
+          "package.json",
+          JSON.stringify(
+            {
+              name: "nextjs-website",
+              version: "0.1.0",
+              private: true,
+              scripts: {
+                dev: "next dev",
+                build: "next build",
+                start: "next start",
+              },
+              dependencies: {
+                next: "^13.0.0",
+                react: "^18.2.0",
+                "react-dom": "^18.2.0",
+              },
+            },
+            null,
+            2
+          )
+        );
+
+        // Add Tailwind config
+        zip.file("tailwind.config.js", generateTailwindConfig());
+        zip.file("postcss.config.js", generatePostCssConfig());
+      }
+
+      // Generate the zip file
       const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, "my-react-app.zip");
+      saveAs(content, "website-code.zip");
     } catch (error) {
       console.error("Error generating code:", error);
-      alert("Failed to generate code. Please try again.");
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const selectedElement = elements.find((el) => el.id === selectedElementId);
+  // Function to handle element selection
+  const handleSelectElement = useCallback((id: number) => {
+    setSelectedElementId(id);
+  }, []);
 
   return (
-    <div
-      className={`flex flex-col min-h-full ${
-        isDarkTheme ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800"
-      }`}
-    >
-      <div className="p-4 flex justify-between items-center">
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setIsResponsivePreview(!isResponsivePreview)}
-            className={`px-3 py-1 rounded text-sm ${
-              isDarkTheme
-                ? isResponsivePreview
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-700 text-white"
-                : isResponsivePreview
-                ? "bg-blue-500 text-white"
-                : "bg-gray-300 text-gray-800"
-            }`}
-          >
-            {isResponsivePreview ? "Fixed Scale" : "Responsive Preview"}
-          </button>
-        </div>
-        <div className="text-sm">
-          Scale: {Math.round(scaleFactor * 100)}% | Device: {device.name}
-        </div>
-      </div>
-
-      {/* Make the entire content area scrollable */}
-      <div className="flex-1 overflow-visible pb-20">
-        <div ref={canvasContainerRef} className="flex justify-center">
+    <div className="flex flex-col h-full">
+      <div className="flex-grow overflow-hidden relative">
+        <div
+          ref={canvasContainerRef}
+          className="w-full h-full overflow-auto flex items-center justify-center p-4"
+        >
           <div
+            className="relative transition-transform duration-300"
             style={{
               transform: isResponsivePreview ? `scale(${scaleFactor})` : "none",
               transformOrigin: "top center",
@@ -619,19 +760,20 @@ export default function Canvas({
                   ? "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px)"
                   : "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.05) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.05) 20px)",
               }}
+              onClick={() => setSelectedElementId(null)} // Deselect when clicking on the canvas
             >
               {/* Only render top-level elements (those without a parent) to avoid duplicate rendering */}
               {elements
                 .filter((el) => !el.parentId)
                 .map((el) => (
                   <DroppedElement
-                    key={el.id}
+                    key={`top-level-${el.id}`}
                     element={el}
                     allElements={elements}
                     onResize={updateElementSize}
                     onPropertiesChange={updateElementProperties}
-                    onSelect={() => setSelectedElementId(el.id)}
-                    isSelected={el.id === selectedElementId}
+                    onSelect={handleSelectElement}
+                    selectedElementId={selectedElementId}
                     availablePages={allPages}
                   />
                 ))}
@@ -667,7 +809,7 @@ export default function Canvas({
       {selectedElement && (
         <div
           className={`style-editor-container p-6 ${
-            isDarkTheme ? "bg-gray-800" : "bg-white border border-gray-300"
+            isDarkTheme ? "bg-gray-800" : "bg-white border-t border-gray-700"
           }`}
         >
           <div className="flex justify-between items-center mb-4">
@@ -706,6 +848,14 @@ export default function Canvas({
             </div>
           </div>
 
+          {/* Add element path breadcrumb */}
+          <ElementPathBreadcrumb
+            elementId={selectedElement.id}
+            allElements={elements}
+            onSelectElement={handleSelectElement}
+            isDarkTheme={isDarkTheme}
+          />
+
           <StyleEditor
             properties={selectedElement.properties}
             onChange={(newStyles) =>
@@ -727,6 +877,7 @@ export default function Canvas({
               Element ID: {selectedElement.id} | Position: {selectedElement.x}x
               {selectedElement.y} | Size: {selectedElement.width}x
               {selectedElement.height}
+              {selectedElement.parentId && ` | Parent: ${selectedElement.parentId}`}
             </div>
           </div>
         </div>

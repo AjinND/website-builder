@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useCallback, useMemo } from "react";
+import React, { useRef, useCallback, useMemo, useEffect } from "react";
 import { useDrag } from "react-dnd";
 import { throttle } from "lodash";
 
@@ -14,8 +14,8 @@ interface DroppedElementProps {
     id: number,
     newProperties: { [key: string]: any }
   ) => void;
-  onSelect: () => void;
-  isSelected: boolean;
+  onSelect: (id: number) => void; // Changed to accept the ID directly
+  selectedElementId: number | null; // Changed to receive the selected element ID
   availablePages: { id: string; name: string }[];
 }
 
@@ -25,9 +25,12 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
   onResize,
   onPropertiesChange,
   onSelect,
-  isSelected,
+  selectedElementId, // Use this instead of isSelected
   availablePages,
 }) => {
+  // Determine if this element is selected
+  const isSelected = selectedElementId === element.id;
+
   // We need to ensure the drag item always has the latest properties
   // This function will be called when the drag starts
   const getDragItem = useCallback(
@@ -60,7 +63,25 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
   // Get child elements if this is a container - memoize to prevent unnecessary recalculations
   const childElements = useMemo(() => {
     if (!element.properties.canHaveChildren) return [];
-    return allElements.filter((el) => el.parentId === element.id);
+
+    // Simple approach to prevent circular references:
+    // Only include children where the current element is not a descendant of the child
+    const isDescendantOf = (childId: number, parentId: number): boolean => {
+      if (childId === parentId) return true;
+
+      const parent = allElements.find(el => el.id === parentId);
+      if (!parent || parent.parentId === null) return false;
+
+      return isDescendantOf(childId, parent.parentId);
+    };
+
+    return allElements.filter((el) => {
+      // Only include direct children
+      if (el.parentId !== element.id) return false;
+
+      // Prevent circular references by ensuring the current element is not a descendant of this child
+      return !isDescendantOf(element.id, el.id);
+    });
   }, [element.id, element.properties.canHaveChildren, allElements]);
 
   const resizeRef = useRef<{
@@ -71,17 +92,26 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     startHeight: number;
   } | null>(null);
 
-  // Create throttled resize handler with both leading and trailing calls
-  const throttledResize = useCallback(
-    throttle(
+  // Create throttled resize handler - using useRef to avoid recreating on every render
+  const throttledResizeRef = useRef<Function | null>(null);
+
+  // Initialize the throttled function once
+  useEffect(() => {
+    throttledResizeRef.current = throttle(
       (id: number, width: number, height: number) => {
         onResize(id, width, height);
       },
       30,
       { leading: true, trailing: true }
-    ),
-    [onResize]
-  );
+    );
+
+    // Cleanup function to cancel any pending throttled calls
+    return () => {
+      if (throttledResizeRef.current && 'cancel' in throttledResizeRef.current) {
+        (throttledResizeRef.current as any).cancel();
+      }
+    };
+  }, [onResize]);
 
   // Use refs to avoid circular dependencies
   const handleMouseMoveRef = useRef<(e: MouseEvent) => void>(() => {});
@@ -125,7 +155,11 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       const dy = e.clientY - resizeRef.current.startY;
       const newWidth = Math.max(50, resizeRef.current.startWidth + dx);
       const newHeight = Math.max(30, resizeRef.current.startHeight + dy);
-      throttledResize(element.id, newWidth, newHeight);
+
+      // Use the throttled function from the ref
+      if (throttledResizeRef.current) {
+        throttledResizeRef.current(element.id, newWidth, newHeight);
+      }
     }
   };
 
@@ -382,27 +416,40 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       case "container":
         return (
           <div
-            className="w-full h-full p-4 relative"
+            className="w-full h-full"
             style={{
-              backgroundColor: element.properties.backgroundColor,
-              padding: element.properties.padding,
-              borderRadius: element.properties.borderRadius,
-              borderColor: element.properties.borderColor,
-              borderWidth: element.properties.borderWidth,
-              borderStyle: element.properties.borderStyle,
+              backgroundColor: element.properties.backgroundColor || "transparent",
+              padding: element.properties.padding || "0.5rem",
+              borderRadius: element.properties.borderRadius || "0px",
+              borderColor: element.properties.borderColor || "transparent",
+              borderWidth: element.properties.borderWidth || "0px",
+              borderStyle: element.properties.borderStyle || "solid",
+              position: "relative", // This is crucial for absolute positioning of children
+              overflow: "visible", // Allow children to be visible even if they overflow
+              // Add a subtle background pattern to make containers more visible
+              backgroundImage: isSelected || childElements.length === 0
+                ? "linear-gradient(45deg, rgba(0, 0, 255, 0.03) 25%, transparent 25%, transparent 50%, rgba(0, 0, 255, 0.03) 50%, rgba(0, 0, 255, 0.03) 75%, transparent 75%, transparent)"
+                : "none",
+              backgroundSize: "20px 20px",
             }}
           >
+            {/* Container label */}
+            <div className="absolute top-0 left-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-br z-50">
+              Container {element.id}
+            </div>
+
+            {/* Container content */}
             {childElements.length > 0 ? (
-              // Only render children that are actually visible (performance optimization)
               childElements.map((child) => (
                 <div
-                  key={child.id}
+                  key={`child-${element.id}-${child.id}`}
                   className="absolute"
                   style={{
                     left: child.x,
                     top: child.y,
                     width: child.width,
                     height: child.height,
+                    zIndex: 5, // Ensure children are above the container
                   }}
                 >
                   <DroppedElement
@@ -410,15 +457,18 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
                     allElements={allElements}
                     onResize={onResize}
                     onPropertiesChange={onPropertiesChange}
-                    onSelect={() => {}}
-                    isSelected={false}
+                    onSelect={onSelect}
+                    selectedElementId={selectedElementId}
                     availablePages={availablePages}
                   />
                 </div>
               ))
             ) : (
-              <div className="text-center text-gray-400 text-xs">
-                Container Element - Drop elements here
+              <div className="text-center text-gray-400 text-sm w-full h-full flex items-center justify-center">
+                <div>
+                  <div className="mb-2">Container Element #{element.id}</div>
+                  <div className="text-xs">Drag and drop elements here</div>
+                </div>
               </div>
             )}
           </div>
@@ -428,12 +478,19 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
           <div
             className="w-full h-full overflow-hidden flex flex-col"
             style={{
-              backgroundColor: element.properties.backgroundColor,
-              color: element.properties.textColor,
-              borderRadius: element.properties.borderRadius,
-              boxShadow: element.properties.boxShadow,
+              backgroundColor: element.properties.backgroundColor || "#ffffff",
+              color: element.properties.textColor || "#000000",
+              borderRadius: element.properties.borderRadius || "8px",
+              boxShadow: element.properties.boxShadow || "0 4px 6px rgba(0, 0, 0, 0.1)",
+              position: "relative", // Ensure proper positioning
+              zIndex: 2, // Make sure card is visible
             }}
           >
+            {/* Card label */}
+            <div className="absolute top-0 right-0 bg-purple-500 text-white text-xs px-1 py-0.5 rounded-bl opacity-50 z-10">
+              Card
+            </div>
+
             {element.properties.imageUrl && (
               <img
                 src={element.properties.imageUrl}
@@ -442,8 +499,8 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
               />
             )}
             <div className="p-4 flex-1">
-              <h3 className="font-bold mb-2">{element.properties.title}</h3>
-              <p className="text-sm mb-4">{element.properties.content}</p>
+              <h3 className="font-bold mb-2">{element.properties.title || "Card Title"}</h3>
+              <p className="text-sm mb-4">{element.properties.content || "Card content goes here."}</p>
               {element.properties.buttonText && (
                 <button
                   className="px-4 py-1 text-sm rounded"
@@ -596,27 +653,40 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       case "div":
         return (
           <div
-            className="w-full h-full relative"
+            className="w-full h-full"
             style={{
-              backgroundColor: element.properties.backgroundColor,
-              padding: element.properties.padding,
-              borderRadius: element.properties.borderRadius,
-              borderColor: element.properties.borderColor,
-              borderWidth: element.properties.borderWidth,
-              borderStyle: element.properties.borderStyle,
+              backgroundColor: element.properties.backgroundColor || "transparent",
+              padding: element.properties.padding || "0.5rem",
+              borderRadius: element.properties.borderRadius || "0px",
+              borderColor: element.properties.borderColor || "transparent",
+              borderWidth: element.properties.borderWidth || "0px",
+              borderStyle: element.properties.borderStyle || "solid",
+              position: "relative", // This is crucial for absolute positioning of children
+              overflow: "visible", // Allow children to be visible even if they overflow
+              // Add a subtle background pattern to make divs more visible
+              backgroundImage: isSelected || childElements.length === 0
+                ? "linear-gradient(45deg, rgba(0, 128, 0, 0.03) 25%, transparent 25%, transparent 50%, rgba(0, 128, 0, 0.03) 50%, rgba(0, 128, 0, 0.03) 75%, transparent 75%, transparent)"
+                : "none",
+              backgroundSize: "20px 20px",
             }}
           >
+            {/* Div label */}
+            <div className="absolute top-0 left-0 bg-green-500 text-white text-xs px-1 py-0.5 rounded-br z-50">
+              Div {element.id}
+            </div>
+
+            {/* Div content */}
             {childElements.length > 0 ? (
-              // Only render children that are actually visible (performance optimization)
               childElements.map((child) => (
                 <div
-                  key={child.id}
+                  key={`div-child-${element.id}-${child.id}`}
                   className="absolute"
                   style={{
                     left: child.x,
                     top: child.y,
                     width: child.width,
                     height: child.height,
+                    zIndex: 5, // Ensure children are above the container
                   }}
                 >
                   <DroppedElement
@@ -624,15 +694,18 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
                     allElements={allElements}
                     onResize={onResize}
                     onPropertiesChange={onPropertiesChange}
-                    onSelect={() => {}}
-                    isSelected={false}
+                    onSelect={onSelect}
+                    selectedElementId={selectedElementId}
                     availablePages={availablePages}
                   />
                 </div>
               ))
             ) : (
-              <div className="text-center text-gray-400 text-xs">
-                Div Element - Drop elements here
+              <div className="text-center text-gray-400 text-sm w-full h-full flex items-center justify-center">
+                <div>
+                  <div className="mb-2">Div Element #{element.id}</div>
+                  <div className="text-xs">Drag and drop elements here</div>
+                </div>
               </div>
             )}
           </div>
@@ -656,32 +729,82 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       width: element.width,
       height: element.height,
       opacity: isDragging ? 0.5 : 1,
-      overflow: "hidden",
+      overflow: "visible", // Changed from hidden to visible
+      pointerEvents: "auto", // Ensure the element can receive mouse events
     };
 
     return baseStyles;
   };
 
+  // Determine if this element has a parent that is selected
+  const hasSelectedParent = useMemo(() => {
+    if (!element.parentId) return false;
+    
+    // Check if any parent in the hierarchy is selected
+    let currentParentId: number | null = element.parentId;
+    while (currentParentId) {
+      if (currentParentId === selectedElementId) {
+        return true;
+      }
+      // Find the parent element
+      const parentElement = allElements.find(el => el.id === currentParentId);
+      if (!parentElement) break;
+      currentParentId = parentElement.parentId !== undefined ? parentElement.parentId : null;
+    }
+    return false;
+  }, [element.parentId, selectedElementId, allElements]);
+
+  // Determine if this element is a child of a container
+  const isChildElement = element.parentId !== null && element.parentId !== undefined;
+
   return (
     <div
-      onClick={onSelect} // When the element is clicked, mark it as selected.
+      onClick={(e) => {
+        e.stopPropagation(); // Prevent parent selection
+        onSelect(element.id); // Pass the element ID directly
+      }}
       ref={drag}
-      className={`absolute border border-gray-600 bg-gray-800 select-none transition-all duration-150 ${
-        isSelected ? "ring-2 ring-blue-500" : ""
+      className={`border transition-all duration-150 ${
+        isSelected
+          ? "ring-2 ring-blue-500 border-blue-500" // Highlighted when selected
+          : hasSelectedParent
+            ? "border-blue-300 border-dashed" // Dashed border when parent is selected
+            : "border-gray-200" // Lighter border normally
       } ${isFullWidthElement ? "responsive-element" : ""}`}
-      style={getResponsiveStyles()}
+      style={{
+        ...getResponsiveStyles(),
+        backgroundColor: isSelected ? "rgba(59, 130, 246, 0.05)" : "transparent",
+        position: "absolute", // Always use absolute positioning
+        overflow: "visible", // Allow content to be visible outside bounds
+        zIndex: isSelected ? 50 : (hasSelectedParent ? 40 : 30), // Higher z-index values to ensure visibility
+        boxSizing: "border-box", // Include padding and border in element's dimensions
+        pointerEvents: "auto", // Ensure the element can receive mouse events
+      }}
       data-element-type={element.type}
+      data-element-id={element.id}
+      data-parent-id={element.parentId || "none"}
     >
       {renderContent()}
+
+      {/* Resize handle */}
       <div
-        className="absolute bottom-0 right-0 w-3 h-3 bg-gray-500 cursor-se-resize"
+        className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 cursor-se-resize rounded-tl"
+        style={{ opacity: 0.7, zIndex: 100 }}
         onMouseDown={handleMouseDown}
       />
+
+      {/* Element info badge - only show when selected */}
       {isSelected && (
-        <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-1 rounded-bl">
-          {element.type}
+        <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-bl z-100">
+          {element.type} {element.parentId ? `(Child of ${element.parentId})` : ""}
         </div>
       )}
+
+      {/* Debug info - uncomment for debugging
+      <div className="absolute bottom-0 left-0 bg-black text-white text-xs p-1 opacity-50">
+        ID: {element.id} | X: {element.x} Y: {element.y} | W: {element.width} H: {element.height}
+      </div>
+      */}
     </div>
   );
 };
