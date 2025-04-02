@@ -53,6 +53,11 @@ export default function PageManager() {
 
   // Function to delete a page
   const deletePage = (id: string) => {
+    if (!pages.find((page) => page.id === id)) {
+      console.error("Page not found");
+      return;
+    }
+
     if (pages.length <= 1) return; // Don't delete the last page
 
     const newPages = pages.filter((page) => page.id !== id);

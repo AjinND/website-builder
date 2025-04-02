@@ -1,14 +1,13 @@
 import { DroppedElementType } from "@/types/types";
 
-export const getAbsolutePosition = (
-  el: DroppedElementType,
-  elements: DroppedElementType[]
-) => {
+export const getAbsolutePosition = (el: DroppedElementType, elements: DroppedElementType[]) => {
+  let absX = el.x;
+  let absY = el.y;
   let currentEl = el;
-  let absX = currentEl.x;
-  let absY = currentEl.y;
+  let visitedNodes = new Set();
 
-  while (currentEl.parentId) {
+  while (currentEl.parentId && !visitedNodes.has(currentEl.id)) {
+    visitedNodes.add(currentEl.id);
     const parent = elements.find((p) => p.id === currentEl.parentId);
     if (!parent) break;
 
@@ -16,23 +15,20 @@ export const getAbsolutePosition = (
     absX += parent.x;
     absY += parent.y;
 
-    // Account for parent's padding if it's a container
-    if (parent.properties.canHaveChildren) {
-      // Parse padding value - default to 20px if not specified or if parsing fails
+    // We only need to add padding once for the immediate parent of the element
+    // This is because the child's x,y coordinates are already relative to the parent's content area
+    // and should not include padding again for each level of nesting
+    if (parent.id === el.parentId && parent.properties.canHaveChildren) {
       const paddingStr = parent.properties.padding || "20px";
-      let padding = 20; // Default padding in pixels
-
-      // Try to parse the padding value
-      if (typeof paddingStr === 'string') {
-        const match = paddingStr.match(/^(\d+)(?:px)?$/);
+      let padding = 20;
+      if (typeof paddingStr === "string") {
+        const match = paddingStr.match(/^(\d+)(px|%)?$/);
         if (match) {
-          padding = parseInt(match[1], 10);
+          padding = match[2] === "%" ? (parseInt(match[1], 10) / 100) * parent.width : parseInt(match[1], 10);
         }
-      } else if (typeof paddingStr === 'number') {
+      } else if (typeof paddingStr === "number") {
         padding = paddingStr;
       }
-
-      // Add padding to the absolute position
       absX += padding;
       absY += padding;
     }

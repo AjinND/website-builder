@@ -207,6 +207,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
           </div>
           <div className={`flex ${isMinimized ? "flex-col" : "space-x-1"}`}>
             <button
+              aria-label="Toggle toolbox"
               onClick={toggleDockPosition}
               title={`Dock to ${dockPosition === "left" ? "right" : "left"}`}
               className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
@@ -214,6 +215,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               {dockPosition === "left" ? "⬅️" : "➡️"}
             </button>
             <button
+              aria-label="Toggle toolbox"
               onClick={handleMinimize}
               title={isMinimized ? "Expand" : "Minimize"}
               className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
