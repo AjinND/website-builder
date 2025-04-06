@@ -12,6 +12,8 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#ffffff",
         fontSize: "16px",
         fontWeight: "normal",
+        height: "100px",
+        width: "100%",
       };
     case "navbar":
       return {
@@ -24,6 +26,8 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#ffffff",
         fontSize: "16px",
         fontWeight: "normal",
+        height: "100px",
+        width: "100%",
       };
     case "jumbotron":
       return {
@@ -35,6 +39,8 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#ffffff",
         fontSize: "18px",
         fontWeight: "bold",
+        height: "100px",
+        width: "100%",
       };
     case "text":
       return {
@@ -42,6 +48,8 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#000000",
         fontSize: "16px",
         fontWeight: "normal",
+        height: "100px",
+        width: "100%",
       };
     case "heading":
       return {
@@ -51,6 +59,8 @@ export const getDefaultProperties = (type: string) => {
         fontSize: "24px",
         fontWeight: "bold",
         textAlign: "left",
+        height: "100px",
+        width: "100%",
       };
     case "button":
       return {
@@ -61,6 +71,8 @@ export const getDefaultProperties = (type: string) => {
         fontSize: "16px",
         fontWeight: "bold",
         borderRadius: "4px",
+        height: "100px",
+        width: "100%",
       };
     case "image":
       return {
@@ -68,6 +80,8 @@ export const getDefaultProperties = (type: string) => {
         linkTo: "", // Page to link to
         altText: "Image description",
         objectFit: "cover",
+        height: "100px",
+        width: "100%",
       };
     case "footer":
       return {
@@ -85,6 +99,8 @@ export const getDefaultProperties = (type: string) => {
         backgroundColor: "#222222",
         textColor: "#ffffff",
         fontSize: "14px",
+        height: "100px",
+        width: "100%",
       };
     case "divider":
       return {
@@ -92,6 +108,8 @@ export const getDefaultProperties = (type: string) => {
         thickness: "1px",
         style: "solid",
         margin: "20px 0",
+        height: "100px",
+        width: "100%",
       };
     case "container":
       return {
@@ -102,6 +120,8 @@ export const getDefaultProperties = (type: string) => {
         borderWidth: "0px",
         borderStyle: "solid",
         canHaveChildren: true,
+        height: "100px",
+        width: "100%",
       };
     case "card":
       return {
@@ -115,6 +135,8 @@ export const getDefaultProperties = (type: string) => {
         borderRadius: "8px",
         boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
         canHaveChildren: true,
+        height: "100px",
+        width: "100%",
       };
     case "list":
       return {
@@ -127,6 +149,8 @@ export const getDefaultProperties = (type: string) => {
         textColor: "#000000",
         fontSize: "16px",
         spacing: "8px",
+        height: "100px",
+        width: "100%",
       };
     case "form":
       return {
@@ -140,6 +164,8 @@ export const getDefaultProperties = (type: string) => {
         labelColor: "#000000",
         backgroundColor: "#ffffff",
         borderColor: "#ced4da",
+        height: "100px",
+        width: "100%",
       };
     case "input":
       return {
@@ -151,6 +177,8 @@ export const getDefaultProperties = (type: string) => {
         borderColor: "#ced4da",
         borderRadius: "4px",
         padding: "8px 12px",
+        height: "100px",
+        width: "100%",
       };
     case "video":
       return {
@@ -165,6 +193,8 @@ export const getDefaultProperties = (type: string) => {
         name: "star", // icon name
         size: "24px",
         color: "#007bff",
+        height: "50px",
+        width: "50px",
       };
     case "div":
       return {
@@ -175,8 +205,13 @@ export const getDefaultProperties = (type: string) => {
         borderWidth: "1px",
         borderStyle: "solid",
         canHaveChildren: true,
+        height: "50px",
+        width: "100%",
       };
     default:
-      return {};
+      return {
+        height: "0%",
+        width: "0%",
+      };
   }
 };

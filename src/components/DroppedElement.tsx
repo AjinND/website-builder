@@ -2,103 +2,80 @@
 
 import React, { useRef, useCallback, useMemo, useEffect } from "react";
 import { useDrag } from "react-dnd";
-import { throttle } from "lodash";
 
-import { DroppedElementType } from "@/types/types";
+import { DroppedElementType, DroppedElementProps } from "@/types/types";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setSelectedElement, setElements } from "@/store/canvasSlice";
+// import {getAbsolutePosition} from "@/utils/calculateAbsolutePosition";
 
-interface DroppedElementProps {
-  element: DroppedElementType;
-  allElements: DroppedElementType[];
-  onResize: (id: number, width: number, height: number) => void;
-  onPropertiesChange: (
-    id: number,
-    newProperties: { [key: string]: any }
-  ) => void;
-  onSelect: (id: number) => void;
-  selectedElementId: number | null;
-  availablePages: { id: string; name: string }[];
+interface DragItem {
+  id: number;
+  type: string;
+  parentId: number | null;
 }
 
 const DroppedElement: React.FC<DroppedElementProps> = ({
   element,
-  allElements,
-  onResize,
-  onPropertiesChange,
+  isSelected,
   onSelect,
-  selectedElementId,
-  availablePages,
+  onDelete,
+  onUpdate,
+  scaleFactor,
+  isDarkTheme = true,
+  canvasWidth,
+  canvasHeight,
 }) => {
-  const isSelected = selectedElementId === element.id;
+  const allElements = useAppSelector((state) => state.canvas.elements);
+  // Inside the component, before the return statement
+  const dispatch = useAppDispatch();
+  const selectedElementId = useAppSelector(
+    (state) => state.canvas.selectedElementId
+  );
+  const elements = useAppSelector((state) => state.canvas.elements);
+
+  // const isInsideContainer = (
+  //   elAbsX: number,
+  //   elAbsY: number,
+  //   elWidth: number,
+  //   elHeight: number,
+  //   container: DroppedElementType,
+  //   containerAbsX: number,
+  //   containerAbsY: number
+  // ) => {
+  //   const paddingStr = container.properties.padding || "20px";
+  //   let padding = 20;
+  //   if (typeof paddingStr === "string") {
+  //     const match = paddingStr.match(/^(\d+)(px|%)?$/);
+  //     if (match) {
+  //       padding = match[2] === "%" ? (parseInt(match[1], 10) / 100) * container.width : parseInt(match[1], 10);
+  //     }
+  //   } else if (typeof paddingStr === "number") {
+  //     padding = paddingStr;
+  //   }
+
+  //   const innerLeft = containerAbsX + padding;
+  //   const innerTop = containerAbsY + padding;
+  //   const innerRight = containerAbsX + container.width - padding;
+  //   const innerBottom = containerAbsY + container.height - padding;
+
+  //   return (
+  //     elAbsX >= innerLeft &&
+  //     elAbsX + elWidth <= innerRight &&
+  //     elAbsY >= innerTop &&
+  //     elAbsY + elHeight <= innerBottom
+  //   );
+  // };
 
   const getDragItem = useCallback(
     () => ({
       id: element.id,
       type: element.type,
-      parentId: element.parentId,
+      parentId: element.parentId || null,
     }),
     [element.id, element.type, element.parentId]
   );
 
-  const [{ isDragging }, drag] = useDrag(
-    () => ({
-      type: "element",
-      item: getDragItem,
-      collect: (monitor) => ({
-        isDragging: monitor.isDragging(),
-      }),
-      end: (item, monitor) => {
-        if (!monitor.didDrop()) {
-          console.log("Drag cancelled");
-        }
-      },
-    }),
-    [getDragItem]
-  );
-
-  const childElements = useMemo(() => {
-    if (!element.properties.canHaveChildren) return [];
-  
-    const isDescendantOf = (descendantId: number, ancestorId: number): boolean => {
-      if (descendantId === ancestorId) return true;
-      const descendant = allElements.find((el) => el.id === descendantId);
-      if (!descendant || descendant.parentId === null) return false;
-      return descendant.parentId !== undefined && isDescendantOf(descendant.parentId, ancestorId);
-    };
-  
-    return allElements.filter((el) => {
-      if (el.parentId !== element.id) return false;
-      return !isDescendantOf(element.id, el.id);
-    });
-  }, [element.id, element.properties.canHaveChildren, allElements]);
-
-  const resizeRef = useRef<{
-    isResizing: boolean;
-    startX: number;
-    startY: number;
-    startWidth: number;
-    startHeight: number;
-  } | null>(null);
-
-  const throttledResizeRef = useRef<Function | null>(null);
-
-  useEffect(() => {
-    throttledResizeRef.current = throttle(
-      (id: number, width: number, height: number) => {
-        onResize(id, width, height);
-      },
-      30,
-      { leading: true, trailing: true }
-    );
-
-    return () => {
-      if (
-        throttledResizeRef.current &&
-        "cancel" in throttledResizeRef.current
-      ) {
-        (throttledResizeRef.current as any).cancel();
-      }
-    };
-  }, [onResize]);
+  const dragRef = useRef<HTMLDivElement>(null);
 
   const handleMouseMoveRef = useRef<(e: MouseEvent) => void>(() => {});
   const handleMouseUpRef = useRef<() => void>(() => {});
@@ -111,10 +88,206 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     handleMouseUpRef.current?.();
   }, []);
 
+  const [{ isDragging }, drag] = useDrag(
+    () => ({
+      type: "element",
+      item: getDragItem,
+      collect: (monitor) => ({
+        isDragging: monitor.isDragging(),
+      }),
+      end: (item, monitor) => {
+        if (!monitor.didDrop()) {
+          const updatedElement = {
+            ...element,
+            x: element.x,
+            y: element.y,
+          };
+          onUpdate(updatedElement);
+        }
+      },
+    }),
+    [getDragItem, element, onUpdate]
+  );
+
+  useEffect(() => {
+    if (dragRef.current) {
+      drag(dragRef.current);
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMoveWrapper);
+      document.removeEventListener("mouseup", handleMouseUpWrapper);
+    };
+  }, [drag, handleMouseMoveWrapper, handleMouseUpWrapper]);
+
+  const childElements = useMemo<DroppedElementType[]>(() => {
+    if (!element.properties.canHaveChildren || !element.children) return [];
+    return allElements.filter(
+      (child) =>
+        child.parentId === element.id || element.children?.includes(child.id)
+    );
+  }, [
+    element.id,
+    element.properties.canHaveChildren,
+    element.children,
+    allElements,
+  ]);
+
+  const resizeRef = useRef<{
+    isResizing: boolean;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
+
   const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      e.preventDefault();
+      onSelect();
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startElementX = element.x;
+      const startElementY = element.y;
+
+      const handleMouseMove = (e: MouseEvent) => {
+        const elementStillExists = allElements.some(
+          (el) => el.id === element.id
+        );
+        if (!elementStillExists) {
+          document.removeEventListener("mousemove", handleMouseMove);
+          document.removeEventListener("mouseup", handleMouseUp);
+          return;
+        }
+
+        const dx = (e.clientX - startX) / scaleFactor;
+        const dy = (e.clientY - startY) / scaleFactor;
+
+        let newX = startElementX + dx;
+        let newY = startElementY + dy;
+
+        if (!element.parentId) {
+          newX = Math.max(0, Math.min(newX, canvasWidth - element.width));
+          newY = Math.max(0, Math.min(newY, canvasHeight - element.height));
+        } else {
+          const parent = allElements.find((el) => el.id === element.parentId);
+          if (parent) {
+            const paddingStr = parent.properties.padding || "20px";
+            let padding = 20;
+            if (typeof paddingStr === "string") {
+              const match = paddingStr.match(/^(\d+)(px|%)?$/);
+              if (match) {
+                padding =
+                  match[2] === "%"
+                    ? (parseInt(match[1], 10) / 100) * parent.width
+                    : parseInt(match[1], 10);
+              }
+            } else if (typeof paddingStr === "number") {
+              padding = paddingStr;
+            }
+
+            const maxX = parent.width - element.width - padding;
+            const maxY = parent.height - element.height - padding;
+
+            newX = Math.max(padding, Math.min(newX, maxX));
+            newY = Math.max(padding, Math.min(newY, maxY));
+          }
+        }
+
+        const updatedElement = {
+          ...element,
+          x: newX,
+          y: newY,
+        };
+        onUpdate(updatedElement);
+      };
+
+      const handleMouseUp = () => {
+        const elementStillExists = allElements.some(
+          (el) => el.id === element.id
+        );
+        if (!elementStillExists) {
+          document.removeEventListener("mousemove", handleMouseMove);
+          document.removeEventListener("mouseup", handleMouseUp);
+          return;
+        }
+
+        // // Calculate absolute position
+        // const { absX, absY } = getAbsolutePosition(element, allElements);
+
+        // let newParentId: number | null = null;
+        // let newX = element.x;
+        // let newY = element.y;
+
+        // // Check current parent (if any)
+        // if (element.parentId) {
+        //   const parent = allElements.find((el) => el.id === element.parentId);
+        //   if (parent) {
+        //     const parentAbs = getAbsolutePosition(parent, allElements);
+        //     if (isInsideContainer(absX, absY, element.width, element.height, parent, parentAbs.absX, parentAbs.absY)) {
+        //       newParentId = element.parentId; // Still inside, no change
+        //     } else {
+        //       newParentId = null; // Moved outside, become top-level
+        //       newX = absX; // Use absolute position as canvas coordinates
+        //       newY = absY;
+        //     }
+        //   }
+        // } else {
+        //   // Check for new parents among containers
+        //   const containers = allElements.filter(
+        //     (el) => el.properties.canHaveChildren && el.id !== element.id
+        //   );
+        //   for (const container of containers) {
+        //     const containerAbs = getAbsolutePosition(container, allElements);
+        //     if (isInsideContainer(absX, absY, element.width, element.height, container, containerAbs.absX, containerAbs.absY)) {
+        //       newParentId = container.id;
+        //       newX = absX - containerAbs.absX; // Relative to new parent
+        //       newY = absY - containerAbs.absY;
+        //       break;
+        //     }
+        //   }
+        //   if (!newParentId) {
+        //     newX = absX; // Remains top-level
+        //     newY = absY;
+        //   }
+        // }
+
+        // // Update element with new parentId and position
+        // const updatedElement = { ...element, parentId: newParentId, x: newX, y: newY };
+        // onUpdate(updatedElement);
+
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [
+      element,
+      onSelect,
+      onUpdate,
+      allElements,
+      scaleFactor,
+      canvasWidth,
+      canvasHeight,
+    ]
+  );
+
+  const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
+
+      const elementStillExists = allElements.some((el) => el.id === element.id);
+      if (!elementStillExists) {
+        return;
+      }
+
+      onSelect();
+
       resizeRef.current = {
         isResizing: true,
         startX: e.clientX,
@@ -122,6 +295,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
         startWidth: element.width,
         startHeight: element.height,
       };
+
       document.addEventListener("mousemove", handleMouseMoveWrapper);
       document.addEventListener("mouseup", handleMouseUpWrapper);
     },
@@ -130,26 +304,59 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
       element.height,
       handleMouseMoveWrapper,
       handleMouseUpWrapper,
+      allElements,
+      element.id,
+      onSelect,
     ]
   );
 
   handleMouseMoveRef.current = (e: MouseEvent) => {
     if (resizeRef.current && resizeRef.current.isResizing) {
-      const dx = e.clientX - resizeRef.current.startX;
-      const dy = e.clientY - resizeRef.current.startY;
+      const elementStillExists = allElements.some((el) => el.id === element.id);
+      if (!elementStillExists) {
+        if (resizeRef.current) {
+          resizeRef.current.isResizing = false;
+        }
+        document.removeEventListener("mousemove", handleMouseMoveWrapper);
+        document.removeEventListener("mouseup", handleMouseUpWrapper);
+        return;
+      }
+
+      const dx = (e.clientX - resizeRef.current.startX) / scaleFactor;
+      const dy = (e.clientY - resizeRef.current.startY) / scaleFactor;
       const newWidth = Math.max(50, resizeRef.current.startWidth + dx);
       const newHeight = Math.max(30, resizeRef.current.startHeight + dy);
 
-      if (throttledResizeRef.current) {
-        throttledResizeRef.current(element.id, newWidth, newHeight);
-      }
+      const updatedElement = {
+        ...element,
+        width: newWidth,
+        height: newHeight,
+      };
+      onUpdate(updatedElement);
     }
   };
 
   handleMouseUpRef.current = () => {
+    const elementStillExists = allElements.some((el) => el.id === element.id);
+    if (!elementStillExists) {
+      if (resizeRef.current) {
+        resizeRef.current.isResizing = false;
+      }
+      document.removeEventListener("mousemove", handleMouseMoveWrapper);
+      document.removeEventListener("mouseup", handleMouseUpWrapper);
+      return;
+    }
+
     if (resizeRef.current) {
+      const updatedElement = {
+        ...element,
+        width: Math.max(50, element.width),
+        height: Math.max(30, element.height),
+      };
+      onUpdate(updatedElement);
       resizeRef.current.isResizing = false;
     }
+
     document.removeEventListener("mousemove", handleMouseMoveWrapper);
     document.removeEventListener("mouseup", handleMouseUpWrapper);
   };
@@ -247,11 +454,16 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
           <div
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) =>
-              onPropertiesChange(element.id, {
-                content: e.currentTarget.textContent || "",
-              })
-            }
+            onBlur={(e) => {
+              const updatedElement = {
+                ...element,
+                properties: {
+                  ...element.properties,
+                  content: e.currentTarget.textContent || "",
+                },
+              };
+              onUpdate(updatedElement);
+            }}
             className="w-full h-full p-2 overflow-auto"
             style={{
               color: element.properties.textColor,
@@ -267,11 +479,16 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
           <div
             contentEditable
             suppressContentEditableWarning
-            onBlur={(e) =>
-              onPropertiesChange(element.id, {
-                content: e.currentTarget.textContent || "",
-              })
-            }
+            onBlur={(e) => {
+              const updatedElement = {
+                ...element,
+                properties: {
+                  ...element.properties,
+                  content: e.currentTarget.textContent || "",
+                },
+              };
+              onUpdate(updatedElement);
+            }}
             className="w-full h-full p-2 overflow-auto"
             style={{
               color: element.properties.textColor,
@@ -397,8 +614,6 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
           />
         );
       case "container":
-        // const childElements = allElements.filter((el) => el.parentId === element.id);
-        console.log(`Rendering container ${element.id} with childElements:`, childElements);
         return (
           <div
             className="w-full h-full"
@@ -417,33 +632,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
             <div className="absolute top-0 left-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-br z-50">
               Container {element.id}
             </div>
-            {childElements.length > 0 ? (
-              childElements.map((child) => (
-                <div
-                  key={`child-${element.id}-${child.id}`}
-                  className="absolute"
-                  style={{
-                    left: child.x,
-                    top: child.y,
-                    width: child.width,
-                    height: child.height,
-                    zIndex: 5,
-                    border: "2px solid red", // Debug border to visualize child element boundaries
-                    overflow: "visible", // Ensure child content isn't clipped
-                  }}
-                >
-                  <DroppedElement
-                    element={child}
-                    allElements={allElements}
-                    onResize={onResize}
-                    onPropertiesChange={onPropertiesChange}
-                    onSelect={onSelect}
-                    selectedElementId={selectedElementId}
-                    availablePages={availablePages}
-                  />
-                </div>
-              ))
-            ) : (
+            {childElements.length === 0 && (
               <div className="text-center text-gray-400 text-sm w-full h-full flex items-center justify-center">
                 <div>
                   <div className="mb-2">Container Element #{element.id}</div>
@@ -656,32 +845,7 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
             <div className="absolute top-0 left-0 bg-green-500 text-white text-xs px-1 py-0.5 rounded-br z-50">
               Div {element.id}
             </div>
-            {childElements.length > 0 ? (
-              childElements.map((child) => (
-                <div
-                  key={`div-child-${element.id}-${child.id}`}
-                  className="absolute"
-                  style={{
-                    left: child.x,
-                    top: child.y,
-                    width: child.width,
-                    height: child.height,
-                    zIndex: 5,
-                    overflow: "visible", // Ensure child content isn't clipped
-                  }}
-                >
-                  <DroppedElement
-                    element={child}
-                    allElements={allElements}
-                    onResize={onResize}
-                    onPropertiesChange={onPropertiesChange}
-                    onSelect={onSelect}
-                    selectedElementId={selectedElementId}
-                    availablePages={availablePages}
-                  />
-                </div>
-              ))
-            ) : (
+            {childElements.length === 0 && (
               <div className="text-center text-gray-400 text-sm w-full h-full flex items-center justify-center">
                 <div>
                   <div className="mb-2">Div Element #{element.id}</div>
@@ -700,106 +864,144 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
     element.type
   );
 
-  const getResponsiveStyles = () => {
-    const parent = allElements.find((el) => el.id === element.parentId);
-    if (parent) {
-      const paddingStr = parent.properties.padding || "20px";
-      let padding = 20;
-      if (typeof paddingStr === "string") {
-        const match = paddingStr.match(/^(\d+)(px|%)?$/);
-        if (match) {
-          padding = match[2] === "%" ? (parseInt(match[1], 10) / 100) * parent.width : parseInt(match[1], 10);
-        }
-      } else if (typeof paddingStr === "number") {
-        padding = paddingStr;
-      }
-      const innerWidth = parent.width - 2 * padding;
-      const innerHeight = parent.height - 2 * padding;
-      const clampedX = Math.max(padding, Math.min(innerWidth - element.width, element.x));
-      const clampedY = Math.max(padding, Math.min(innerHeight - element.height, element.y));
-      return {
-        left: clampedX,
-        top: clampedY,
-        width: element.width,
-        height: element.height,
-        opacity: isDragging ? 0.5 : 1,
-        overflow: "visible",
-        pointerEvents: "auto",
-      };
-    }
-    return {
-      left: element.x,
-      top: element.y,
-      width: element.width,
-      height: element.height,
-      opacity: isDragging ? 0.5 : 1,
-      overflow: "visible",
-      pointerEvents: "auto",
-    };
-  };
-
-  // const getResponsiveStyles = () => {
-  //   const baseStyles = {
-  //     left: element.x,
-  //     top: element.y,
-  //     width: element.width,
-  //     height: element.height,
-  //     opacity: isDragging ? 0.5 : 1,
-  //     overflow: "visible",
-  //     pointerEvents: "auto",
-  //   };
-  //   return baseStyles;
-  // };
-
-  const hasSelectedParent = useMemo(() => {
-    if (!element.parentId) return false;
-    let currentParentId: number | null = element.parentId;
-    while (currentParentId) {
-      if (currentParentId === selectedElementId) {
-        return true;
-      }
-      const parentElement = allElements.find((el) => el.id === currentParentId);
-      if (!parentElement) break;
-      currentParentId =
-        parentElement.parentId !== undefined ? parentElement.parentId : null;
-    }
-    return false;
-  }, [element.parentId, selectedElementId, allElements]);
-
+  // return (
+  //   <div
+  //     ref={dragRef}
+  //     className={`absolute cursor-move ${
+  //       isSelected
+  //         ? isDarkTheme
+  //           ? "border-2 border-blue-500"
+  //           : "border-2 border-blue-600"
+  //         : ""
+  //     }`}
+  //     style={{
+  //       left: typeof element.x === "number" && !isNaN(element.x) ? element.x : 0,
+  //       top: typeof element.y === "number" && !isNaN(element.y) ? element.y : 0,
+  //       width:
+  //         typeof element.width === "number" && !isNaN(element.width)
+  //           ? element.width
+  //           : 100,
+  //       height:
+  //         typeof element.height === "number" && !isNaN(element.height)
+  //           ? element.height
+  //           : 100,
+  //       opacity: isDragging ? 0.5 : 1,
+  //       backgroundColor: element.properties.backgroundColor || "#ffffff",
+  //       color: element.properties.textColor || "inherit",
+  //       fontSize: element.properties.fontSize || "inherit",
+  //       fontWeight: element.properties.fontWeight || "inherit",
+  //       transform: `scale(${scaleFactor})`,
+  //       transformOrigin: "top left",
+  //       boxShadow: isDarkTheme
+  //         ? "0 0 5px rgba(255, 255, 255, 0.3)"
+  //         : "0 0 5px rgba(0, 0, 0, 0.3)",
+  //       zIndex: isSelected ? 10 : 1,
+  //     }}
+  //     onClick={(e) => {
+  //       e.stopPropagation();
+  //       onSelect();
+  //     }}
+  //     onMouseDown={handleMouseDown}
+  //   >
+  //     {renderContent()}
+  //     <div
+  //       className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 cursor-se-resize rounded-tl"
+  //       style={{ opacity: 0.7, zIndex: 100 }}
+  //       onMouseDown={handleResizeMouseDown}
+  //     />
+  //     {isSelected && (
+  //       <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-bl z-100">
+  //         {element.type}{" "}
+  //         {element.parentId ? `(Child of ${element.parentId})` : ""}
+  //       </div>
+  //     )}
+  //   </div>
+  // );
   return (
     <div
+      ref={dragRef}
+      className={`absolute cursor-move ${
+        isSelected
+          ? isDarkTheme
+            ? "border-2 border-blue-500"
+            : "border-2 border-blue-600"
+          : ""
+      }`}
+      style={{
+        left:
+          typeof element.x === "number" && !isNaN(element.x) ? element.x : 0,
+        top: typeof element.y === "number" && !isNaN(element.y) ? element.y : 0,
+        width:
+          typeof element.width === "number" && !isNaN(element.width)
+            ? element.width
+            : 100,
+        height:
+          typeof element.height === "number" && !isNaN(element.height)
+            ? element.height
+            : 100,
+        opacity: isDragging ? 0.5 : 1,
+        backgroundColor: element.properties.backgroundColor || "#ffffff",
+        color: element.properties.textColor || "inherit",
+        fontSize: element.properties.fontSize || "inherit",
+        fontWeight: element.properties.fontWeight || "inherit",
+        transform: `scale(${scaleFactor})`,
+        transformOrigin: "top left",
+        boxShadow: isDarkTheme
+          ? "0 0 5px rgba(255, 255, 255, 0.3)"
+          : "0 0 5px rgba(0, 0, 0, 0.3)",
+        zIndex: isSelected ? 10 : 1,
+      }}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(element.id);
+        onSelect();
       }}
-      ref={drag}
-      className={`border transition-all duration-150 ${
-        isSelected
-          ? "ring-2 ring-blue-500 border-blue-500"
-          : hasSelectedParent
-          ? "border-blue-300 border-dashed"
-          : "border-gray-200"
-      } ${isFullWidthElement ? "responsive-element" : ""}`}
-      style={{
-        ...getResponsiveStyles(),
-        backgroundColor: isSelected
-          ? "rgba(59, 130, 246, 0.05)"
-          : "transparent",
-        position: "absolute",
-        overflow: "visible",
-        zIndex: isSelected ? 50 : hasSelectedParent ? 40 : 30,
-        boxSizing: "border-box",
-        pointerEvents: "auto",
-      }}
-      data-element-type={element.type}
-      data-element-id={element.id}
-      data-parent-id={element.parentId || "none"}
+      onMouseDown={handleMouseDown}
     >
-      {renderContent()}
+      <div className="relative w-full h-full">
+        {renderContent()}
+        {element.properties.canHaveChildren &&
+          childElements.map((child) => (
+            <DroppedElement
+              key={child.id}
+              element={child}
+              isSelected={selectedElementId === child.id}
+              onSelect={() => dispatch(setSelectedElement(child.id))}
+              onDelete={() => {
+                const childIds = new Set<number>();
+                const findAllChildren = (parentId: number) => {
+                  elements.forEach((el) => {
+                    if (el.parentId === parentId) {
+                      childIds.add(el.id);
+                      findAllChildren(el.id);
+                    }
+                  });
+                };
+                findAllChildren(child.id);
+                const newElements = elements.filter(
+                  (el) => el.id !== child.id && !childIds.has(el.id)
+                );
+                dispatch(setElements(newElements));
+                if (selectedElementId === child.id) {
+                  dispatch(setSelectedElement(null));
+                }
+              }}
+              onUpdate={(updatedChild) => {
+                const newElements = elements.map((el) =>
+                  el.id === updatedChild.id ? updatedChild : el
+                );
+                dispatch(setElements(newElements));
+              }}
+              scaleFactor={scaleFactor}
+              isDarkTheme={isDarkTheme}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+            />
+          ))}
+      </div>
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 bg-blue-500 cursor-se-resize rounded-tl"
+        className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 cursor-se-resize rounded-tl"
         style={{ opacity: 0.7, zIndex: 100 }}
-        onMouseDown={handleMouseDown}
+        onMouseDown={handleResizeMouseDown}
       />
       {isSelected && (
         <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs px-1 py-0.5 rounded-bl z-100">
@@ -811,4 +1013,4 @@ const DroppedElement: React.FC<DroppedElementProps> = ({
   );
 };
 
-export default React.memo(DroppedElement);
+export default DroppedElement;
