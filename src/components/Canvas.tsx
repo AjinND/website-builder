@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback } from "react";
 import { useDrop } from "react-dnd";
 import { throttle } from "lodash";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import DroppedElement from "./DroppedElement";
 import StyleEditor from "./StyleEditor";
+import ElementPathBreadcrumb from "./ElementPathBreadcrumb";
 import { getDefaultProperties } from "@/utils/defaultProperties";
 import {
   generateIndexJs,
@@ -20,31 +21,52 @@ import {
   generateDivElementJs,
   generateCardElementJs,
 } from "@/utils/codeGenerators";
-import { CanvasProps, DroppedElementType } from "@/types/types";
+import { DroppedElementType, Page } from "@/types/types";
 import {
   getAbsolutePosition,
   getDepth,
 } from "@/utils/calculateAbsolutePosition";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  setElements,
+  setSelectedElement,
+  setScaleFactor,
+  setResponsivePreview,
+  setExtraHeight,
+  setIsGenerating,
+  addElement,
+} from "@/store/canvasSlice";
+import { RootState } from "@/store/store";
+import { CanvasState } from "@/store/canvasSlice";
+
+interface CanvasProps {
+  framework: string;
+  device: {
+    name: string;
+    width: number;
+    height: number;
+  };
+  isDarkTheme?: boolean;
+}
 
 export default function Canvas({
   framework,
   device,
-  elements = [],
-  updateElements,
-  allPages,
   isDarkTheme = true,
 }: CanvasProps) {
-  const [selectedElementId, setSelectedElementId] = useState<number | null>(
-    null
-  );
-  const [extraHeight, setExtraHeight] = useState(0);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [scaleFactor, setScaleFactor] = useState(1);
-  const [isResponsivePreview, setIsResponsivePreview] = useState(false);
+  const dispatch = useAppDispatch();
+  const {
+    elements,
+    selectedElementId,
+    extraHeight,
+    isGenerating,
+    scaleFactor,
+    isResponsivePreview,
+  } = useAppSelector((state: RootState) => state.canvas as CanvasState);
+
   const canvasRef = useRef<HTMLDivElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-  // Calculate scale factor based on available space
   useEffect(() => {
     const calculateScaleFactor = () => {
       if (!canvasContainerRef.current) return 1;
@@ -52,99 +74,88 @@ export default function Canvas({
       const containerWidth = canvasContainerRef.current.clientWidth;
       const containerHeight = canvasContainerRef.current.clientHeight;
 
-      // Add some padding
       const availableWidth = containerWidth - 40;
       const availableHeight = containerHeight - 40;
 
-      // Calculate scale factors for width and height
       const widthScale = availableWidth / device.width;
       const heightScale = availableHeight / (device.height + extraHeight);
 
-      // Use the smaller scale factor to ensure the canvas fits
       return Math.min(widthScale, heightScale, 1);
     };
 
-    const handleResize = () => {
-      setScaleFactor(calculateScaleFactor());
-    };
+    const handleResize = throttle(() => {
+      dispatch(setScaleFactor(calculateScaleFactor()));
+    }, 100);
 
-    setScaleFactor(calculateScaleFactor());
+    dispatch(setScaleFactor(calculateScaleFactor()));
     window.addEventListener("resize", handleResize);
 
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, [device, extraHeight]);
+  }, [device, extraHeight, dispatch]);
 
-  // Track previous device for responsive adjustments
-  const [previousDevice, setPreviousDevice] = useState(device);
+  const [previousDevice, setPreviousDevice] = React.useState(device);
 
-  // Apply responsive adjustments when device changes
   useEffect(() => {
     if (previousDevice.width !== device.width && elements.length > 0) {
-      // Calculate scale factor between previous and current device
       const widthRatio = device.width / previousDevice.width;
 
-      // Adjust element positions and sizes proportionally
-      const responsiveElements = elements.map((el) => {
-        // For full-width elements like headers, footers, and navbars
+      const responsiveElements = elements.map((el: DroppedElementType) => {
         const isFullWidthElement = [
           "header",
           "footer",
           "navbar",
           "divider",
         ].includes(el.type);
-
-        // Calculate new width - full width for certain elements
         const newWidth = isFullWidthElement
-          ? device.width * 0.95 // 95% of device width
+          ? device.width * 0.95
           : Math.round(el.width * widthRatio);
-
-        // Calculate new x position - centered for full width elements
         const newX = isFullWidthElement
-          ? (device.width - newWidth) / 2 // Center horizontally
+          ? (device.width - newWidth) / 2
           : Math.round(el.x * widthRatio);
 
         return {
           ...el,
           width: newWidth,
           x: newX,
-          // Keep y position proportional
           y: Math.round(el.y * (device.height / previousDevice.height)),
         };
       });
 
-      safeUpdateElements(responsiveElements);
+      dispatch(setElements(responsiveElements));
     }
 
     setPreviousDevice(device);
-  }, [device, elements]);
+  }, [device, elements, dispatch]);
 
-  // Function to check if an element is a container that can have children
   const isContainer = useCallback((element: DroppedElementType) => {
     return element.properties.canHaveChildren === true;
   }, []);
 
   const safeUpdateElements = useCallback(
     (newElements: DroppedElementType[]) => {
-      if (typeof updateElements === "function") {
-        // First, ensure all elements have the correct parent-child relationships
-        const elementsWithValidParents = newElements.map((el) => {
-          // If this element has a parentId, make sure the parent exists
-          if (el.parentId) {
-            const parentExists = newElements.some((p) => p.id === el.parentId);
-            if (!parentExists) {
-              // If parent doesn't exist, make this a top-level element
-              return { ...el, parentId: null };
-            }
+      // Create a deep copy of the elements array
+      const elementsCopy = JSON.parse(JSON.stringify(newElements));
+
+      // First, ensure all elements have valid parent references
+      const elementsWithValidParents = elementsCopy.map(
+        (el: DroppedElementType) => {
+          if (
+            el.parentId &&
+            !elementsCopy.some((p: DroppedElementType) => p.id === el.parentId)
+          ) {
+            return { ...el, parentId: null };
           }
           return el;
-        });
+        }
+      );
 
-        // Then constrain elements to canvas boundaries
-        const constrainedElements = elementsWithValidParents.map((el) => {
-          // Only constrain top-level elements or adjust relative to parent
+      // Then, constrain elements to their parent boundaries
+      const constrainedElements = elementsWithValidParents.map(
+        (el: DroppedElementType) => {
           if (!el.parentId) {
+            // Elements directly on the canvas
             return {
               ...el,
               x: Math.max(0, Math.min(device.width - el.width, el.x)),
@@ -154,583 +165,462 @@ export default function Canvas({
               ),
             };
           } else {
-            // For child elements, we need to make sure they stay within their parent
+            // Elements inside containers
             const parent = elementsWithValidParents.find(
-              (p) => p.id === el.parentId
+              (p: DroppedElementType) => p.id === el.parentId
             );
             if (parent) {
+              const paddingStr = parent.properties.padding || "20px";
+              let padding = 20;
+              if (typeof paddingStr === "string") {
+                const match = paddingStr.match(/^(\d+)(px|%)?$/);
+                if (match) {
+                  const paddingValue = parseInt(match[1], 10);
+                  padding =
+                    match[2] === "%"
+                      ? (paddingValue / 100) * parent.width
+                      : paddingValue;
+                }
+              } else if (typeof paddingStr === "number") {
+                padding = paddingStr;
+              }
+
+              const innerWidth = parent.width - 2 * padding;
+              const innerHeight = parent.height - 2 * padding;
+
+              // Calculate relative position within parent
+              const relativeX = Math.max(
+                padding,
+                Math.min(innerWidth - el.width, el.x)
+              );
+              const relativeY = Math.max(
+                padding,
+                Math.min(innerHeight - el.height, el.y)
+              );
+
               return {
                 ...el,
-                x: Math.max(0, Math.min(parent.width - el.width, el.x)),
-                y: Math.max(0, Math.min(parent.height - el.height, el.y)),
+                x: relativeX,
+                y: relativeY,
               };
             }
             return el;
           }
-        });
+        }
+      );
 
-        // Ensure all parent elements have their children in their children array
-        const finalElements = constrainedElements.map((el) => {
+      // Update children arrays for container elements
+      const finalElements = constrainedElements.map(
+        (el: DroppedElementType) => {
           if (isContainer(el)) {
-            // Find all children of this element
             const children = constrainedElements
-              .filter((child) => child.parentId === el.id)
-              .map((child) => child.id);
-
-            // Update the children array
-            return {
-              ...el,
-              children: children,
-            };
+              .filter((child: DroppedElementType) => child.parentId === el.id)
+              .map((child: DroppedElementType) => child.id);
+            return { ...el, children };
           }
           return el;
-        });
+        }
+      );
 
-        updateElements(finalElements);
-      }
+      dispatch(setElements(finalElements));
     },
-    [updateElements, device.width, device.height, extraHeight, isContainer]
+    [dispatch, device.width, device.height, extraHeight, isContainer]
   );
 
-  // Create a debounced version of the element update function
-  // Using debounce with a trailing call ensures the last update is always applied
-  const throttledUpdateElements = useCallback(
-    throttle(
+  const throttledUpdateElementsRef = useRef<Function | null>(null);
+
+  useEffect(() => {
+    throttledUpdateElementsRef.current = throttle(
       (newElements: DroppedElementType[]) => {
-        safeUpdateElements([...newElements]); // Create a new array to ensure React detects the change
+        safeUpdateElements([...newElements]);
       },
       30,
       { leading: true, trailing: true }
-    ), // Use both leading and trailing calls
-    [safeUpdateElements]
+    );
+    return () => {
+      if (
+        throttledUpdateElementsRef.current &&
+        "cancel" in throttledUpdateElementsRef.current
+      ) {
+        (throttledUpdateElementsRef.current as any).cancel();
+      }
+    };
+  }, [safeUpdateElements]);
+
+  const throttledUpdateElements = useCallback(
+    (newElements: DroppedElementType[]) => {
+      const elementsCopy = JSON.parse(JSON.stringify(newElements));
+      if (throttledUpdateElementsRef.current) {
+        throttledUpdateElementsRef.current(elementsCopy);
+      }
+    },
+    []
   );
 
-  // Function to find if the drop position is inside a container element
-  // const findContainerAtPosition = useCallback((x: number, y: number) => {
-  //   // Reverse to check from top to bottom in z-index
-  //   return [...elements].reverse().find(el => {
-  //     if (!isContainer(el)) return false;
+  useEffect(() => {
+    throttledUpdateElementsRef.current = throttle(
+      (newElements: DroppedElementType[]) => {
+        dispatch((_, getState) => {
+          const { canvas } = getState();
+          const updatedElements = [
+            ...canvas.elements.filter(
+              (el) => !newElements.some((ne) => ne.id === el.id)
+            ),
+            ...newElements,
+          ];
+          safeUpdateElements(updatedElements);
+          return setElements(updatedElements);
+        });
+      },
+      30,
+      { leading: true, trailing: true }
+    );
+  }, [dispatch, safeUpdateElements]);
 
-  //     return (
-  //       x >= el.x &&
-  //       x <= el.x + el.width &&
-  //       y >= el.y &&
-  //       y <= el.y + el.height
-  //     );
-  //   });
-  // }, [elements, isContainer]);
   const findContainerAtPosition = useCallback(
     (x: number, y: number) => {
       let candidates: { el: DroppedElementType; depth: number }[] = [];
+
       elements.forEach((el) => {
         if (isContainer(el)) {
           const { absX, absY } = getAbsolutePosition(el, elements);
-          const bbox = {
-            left: absX,
-            top: absY,
-            right: absX + el.width,
-            bottom: absY + el.height,
-          };
+          const paddingStr = el.properties.padding || "20px";
+          let padding = 20;
+
+          if (typeof paddingStr === "string") {
+            const match = paddingStr.match(/^(\d+)(px|%)?$/);
+            if (match) {
+              padding =
+                match[2] === "%"
+                  ? (parseInt(match[1], 10) / 100) * el.width
+                  : parseInt(match[1], 10);
+            }
+          } else if (typeof paddingStr === "number") {
+            padding = paddingStr;
+          }
+
+          // Calculate the inner bounds of the container (accounting for padding)
+          const innerLeft = absX + padding;
+          const innerTop = absY + padding;
+          const innerRight = absX + el.width - padding;
+          const innerBottom = absY + el.height - padding;
+
+          // Check if the drop position is within the inner bounds of the container
           if (
-            x >= bbox.left &&
-            x <= bbox.right &&
-            y >= bbox.top &&
-            y <= bbox.bottom
+            x >= innerLeft &&
+            x <= innerRight &&
+            y >= innerTop &&
+            y <= innerBottom
           ) {
             const depth = getDepth(el, elements);
             candidates.push({ el, depth });
           }
         }
       });
+
       if (candidates.length === 0) return null;
-      const maxDepthCandidate = candidates.reduce((prev, current) =>
-        prev.depth > current.depth ? prev : current
-      );
-      return maxDepthCandidate.el;
+      candidates.sort((a, b) => b.depth - a.depth);
+      return candidates[0].el;
     },
     [elements, isContainer]
   );
 
   const deleteElement = useCallback(
     (id: number) => {
-      const updatedElements = elements.filter((el) => el.id !== id);
-      throttledUpdateElements(updatedElements);
-      setSelectedElementId(null);
-    },
-    [elements, throttledUpdateElements, setSelectedElementId]
-  );
-
-  const duplicateElement = useCallback(
-    (id: number) => {
-      const elementToDuplicate = elements.find((el) => el.id === id);
-      if (!elementToDuplicate) return;
-
-      const newId =
-        elements.length > 0 ? Math.max(...elements.map((el) => el.id)) + 1 : 1;
-      const newElement = {
-        ...elementToDuplicate,
-        id: newId,
-        x: elementToDuplicate.x + 20,
-        y: elementToDuplicate.y + 20,
+      const childIds = new Set<number>();
+      const findAllChildren = (parentId: number) => {
+        elements.forEach((el) => {
+          if (el.parentId === parentId) {
+            childIds.add(el.id);
+            findAllChildren(el.id);
+          }
+        });
       };
 
-      throttledUpdateElements([...elements, newElement]);
-    },
-    [elements, throttledUpdateElements]
-  );
-
-  const updateElementSize = useCallback(
-    (id: number, width: number, height: number) => {
-      const updatedElements = elements.map((el) =>
-        el.id === id ? { ...el, width, height } : el
+      findAllChildren(id);
+      const newElements = elements.filter(
+        (el) => el.id !== id && !childIds.has(el.id)
       );
-      throttledUpdateElements(updatedElements);
+      dispatch(setElements(newElements));
+      if (selectedElementId === id) {
+        dispatch(setSelectedElement(null));
+      }
     },
-    [elements, throttledUpdateElements]
+    [elements, selectedElementId, dispatch]
   );
 
-  const updateElementProperties = useCallback(
-    (id: number, newProperties: { [key: string]: any }) => {
-      const updatedElements = elements.map((el) =>
-        el.id === id
-          ? { ...el, properties: { ...el.properties, ...newProperties } }
-          : el
-      );
-      throttledUpdateElements(updatedElements);
-    },
-    [elements, throttledUpdateElements]
-  );
+  const calculateScaleFactor = useCallback(() => {
+    if (!canvasContainerRef.current) return 1;
 
-  const [{ isOver }, drop] = useDrop(
+    const containerWidth = canvasContainerRef.current.clientWidth;
+    const containerHeight = canvasContainerRef.current.clientHeight;
+
+    const availableWidth = containerWidth - 40;
+    const availableHeight = containerHeight - 40;
+
+    const widthScale = availableWidth / device.width;
+    const heightScale = availableHeight / (device.height + extraHeight);
+
+    return Math.min(widthScale, heightScale, 1);
+  }, [device.width, device.height, extraHeight]);
+
+  const [, drop] = useDrop(
     () => ({
       accept: "element",
-      hover: (
-        item: { id?: number; type: string; parentId?: number },
-        monitor
-      ) => {
-        // We can add hover logic here if needed in the future
-      },
-      drop: (
-        item: { id?: number; type: string; parentId?: number },
-        monitor
-      ) => {
-        // Get the final drop position
-        const offset =
-          monitor.getSourceClientOffset() || monitor.getClientOffset();
+      drop: (item: any, monitor) => {
+        const offset = monitor.getClientOffset();
         if (!offset || !canvasRef.current) return;
 
         const canvasRect = canvasRef.current.getBoundingClientRect();
-        // Adjust for scale factor
-        const x = (offset.x - canvasRect.left) / scaleFactor;
-        const y = (offset.y - canvasRect.top) / scaleFactor;
+        const currentScaleFactor = calculateScaleFactor();
 
-        // Make a copy of the current elements to work with
-        const currentElements = [...elements];
+        // Calculate the drop position relative to the canvas
+        const x = (offset.x - canvasRect.left) / currentScaleFactor;
+        const y = (offset.y - canvasRect.top) / currentScaleFactor;
 
-        // Find if we're dropping inside a container
-        const containerElement = findContainerAtPosition(x, y);
-        const parentId = containerElement ? containerElement.id : null;
-
-        if (item.id !== undefined) {
-          // Moving an existing element
-          // First, create a copy of the elements array
-          let updatedElements = currentElements.map((el) => {
-            if (el.id === item.id) {
-              // If moving to a new parent, adjust coordinates to be relative to parent
-              const newX = parentId ? x - (containerElement?.x || 0) : x;
-              const newY = parentId ? y - (containerElement?.y || 0) : y;
-
-              return {
-                ...el,
-                x: newX,
-                y: newY,
-                parentId,
-              };
-            }
-            return el;
+        // Find the potential parent container at the drop position
+        const potentialParent = elements
+          .filter((el) => el.properties.canHaveChildren)
+          .find((el) => {
+            const elementRect = {
+              left: el.x,
+              top: el.y,
+              right: el.x + el.width,
+              bottom: el.y + el.height,
+            };
+            return (
+              x >= elementRect.left &&
+              x <= elementRect.right &&
+              y >= elementRect.top &&
+              y <= elementRect.bottom
+            );
           });
 
-          // Handle parent-child relationships in a single update
-          // to avoid race conditions
+        // Get default properties for the element type
+        const defaultProps = getDefaultProperties(item.type);
 
-          // 1. If moving to a new parent, add to new parent's children
-          if (parentId) {
-            updatedElements = updatedElements.map((el) => {
-              if (el.id === parentId) {
-                const children = el.children || [];
-                if (item.id !== undefined && !children.includes(item.id)) {
-                  return {
-                    ...el,
-                    children: [...children, item.id].filter(
-                      (id): id is number => id !== undefined
-                    ),
-                  };
-                }
-              }
-              return el;
-            });
+        // Create the new element
+        const newElement: DroppedElementType = {
+          id: Date.now(),
+          type: item.type,
+          x: potentialParent ? x - potentialParent.x : x,
+          y: potentialParent ? y - potentialParent.y : y,
+          // width: getDefaultProperties(item.type).width || 100,
+          // height: getDefaultProperties(item.type).height || 100,
+          width:
+            typeof defaultProps.width === "number" ? defaultProps.width : 100,
+          height:
+            typeof defaultProps.height === "number" ? defaultProps.height : 100,
+          properties: defaultProps,
+          parentId: potentialParent ? potentialParent.id : null,
+        };
+
+        // Update the elements array with the new element
+        const updatedElements = [...elements, newElement];
+
+        // If there's a parent, update its children array
+        if (potentialParent) {
+          const parentIndex = updatedElements.findIndex(
+            (el) => el.id === potentialParent.id
+          );
+          if (parentIndex !== -1) {
+            updatedElements[parentIndex] = {
+              ...updatedElements[parentIndex],
+              children: [
+                ...(updatedElements[parentIndex].children || []),
+                newElement.id,
+              ],
+            };
           }
-
-          // 2. If removing from an old parent, update old parent's children
-          if (item.parentId && item.parentId !== parentId) {
-            updatedElements = updatedElements.map((el) => {
-              if (el.id === item.parentId) {
-                return {
-                  ...el,
-                  children: (el.children || []).filter((id) => id !== item.id),
-                };
-              }
-              return el;
-            });
-          }
-
-          // Apply all updates at once
-          throttledUpdateElements(updatedElements);
-        } else {
-          // Creating a new element
-          const newId =
-            currentElements.length > 0
-              ? Math.max(...currentElements.map((el) => el.id)) + 1
-              : 1;
-
-          // Set default width and height based on element type
-          let width = 100;
-          let height = 50;
-
-          if (["header", "navbar", "footer"].includes(item.type)) {
-            width = device.width * 0.9; // 90% of device width
-            height = 60;
-          } else if (item.type === "jumbotron") {
-            width = device.width * 0.8; // 80% of device width
-            height = 200;
-          } else if (item.type === "container") {
-            width = 300;
-            height = 200;
-          } else if (item.type === "div") {
-            width = 200;
-            height = 150;
-          } else if (item.type === "card") {
-            width = 250;
-            height = 300;
-          } else if (item.type === "form") {
-            width = 300;
-            height = 350;
-          } else if (item.type === "divider") {
-            width = device.width * 0.8;
-            height = 20;
-          } else if (item.type === "video") {
-            width = 320;
-            height = 240;
-          } else if (item.type === "icon") {
-            width = 50;
-            height = 50;
-          }
-
-          const defaultProperties = getDefaultProperties(item.type);
-
-          // If dropping inside a container, adjust coordinates to be relative to parent
-          let newX, newY;
-          if (parentId) {
-            newX = x - (containerElement?.x || 0) - width / 2;
-            newY = y - (containerElement?.y || 0) - height / 2;
-          } else {
-            newX = x - width / 2;
-            newY = y - height / 2;
-          }
-
-          // Create the new element
-          const newElement = {
-            id: newId,
-            type: item.type,
-            x: newX,
-            y: newY,
-            width,
-            height,
-            properties: defaultProperties,
-            parentId,
-            children: [],
-          };
-
-          // Add the new element to our elements array
-          let newElements = [...currentElements, newElement];
-
-          // If adding to a container, update the container's children array
-          if (parentId) {
-            newElements = newElements.map((el) => {
-              if (el.id === parentId) {
-                return {
-                  ...el,
-                  children: [...(el.children || []), newId],
-                };
-              }
-              return el;
-            });
-          }
-
-          // Apply the update
-          throttledUpdateElements(newElements);
         }
+
+        // Apply constraints and update the state
+        safeUpdateElements(updatedElements);
       },
-      collect: (monitor) => ({
-        isOver: !!monitor.isOver(),
-      }),
     }),
-    [
-      elements,
-      device,
-      extraHeight,
-      throttledUpdateElements,
-      findContainerAtPosition,
-      scaleFactor,
-    ]
+    [elements, calculateScaleFactor, safeUpdateElements]
   );
 
-  const serializePageData = (page: (typeof allPages)[0]) => {
-    return {
-      components: page.elements.map((el) => ({
-        id: el.id,
-        type: el.type,
-        position: { x: el.x, y: el.y },
-        size: { width: el.width, height: el.height },
-        styles: el.properties,
-      })),
-    };
-  };
-
-  const generateCode = async () => {
-    setIsGenerating(true);
+  const generateCode = useCallback(async () => {
+    dispatch(setIsGenerating(true));
     try {
-      const generatedPages = await Promise.all(
-        allPages.map(async (page) => {
-          const jsonData = serializePageData(page);
-          console.log("JSON Data ---> ", jsonData.components);
-          const response = await fetch("/api/generate-code", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ jsonData }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to generate code for page: ${page.name}`);
-          }
-
-          const data = await response.json();
-          console.log("Generated Data ---> ", data.generatedCode);
-          return { name: page.name, code: data.generatedCode };
-        })
-      );
-
       const zip = new JSZip();
 
-      // Add boilerplate files
-      zip.file("src/index.js", generateIndexJs());
-      zip.file("src/index.css", generateIndexCss());
-      zip.file("public/index.html", generateIndexHtml());
+      // Add common files
+      zip.file("index.html", generateIndexHtml());
+      zip.file("package.json", generateReactPackageJson());
       zip.file("tailwind.config.js", generateTailwindConfig());
       zip.file("postcss.config.js", generatePostCssConfig());
-      zip.file("package.json", generateReactPackageJson());
+      zip.file("src/index.css", generateIndexCss());
 
-      // Add component files
-      const componentsFolder = zip.folder("src/components");
-      componentsFolder?.file(
-        "ContainerElement.js",
-        generateContainerElementJs()
-      );
-      componentsFolder?.file("DivElement.js", generateDivElementJs());
-      componentsFolder?.file("CardElement.js", generateCardElementJs());
+      // Add framework-specific files
+      if (framework === "React") {
+        zip.file("src/index.js", generateIndexJs());
 
-      // Add router setup
-      zip.file("src/AppRouter.js", generateAppRouterJs(allPages));
+        // Create a Page object from the elements array
+        const currentPage: Page = {
+          id: "page-1",
+          name: "Home",
+          elements: elements,
+        };
 
-      // Add AI-generated page files
-      const pagesFolder = zip.folder("src/pages");
-      generatedPages.forEach(({ name, code }) => {
-        const fileName = `${name.replace(/\s+/g, "").toLowerCase()}.js`;
-        pagesFolder?.file(fileName, code);
-      });
+        zip.file("src/App.js", generateAppRouterJs([currentPage]));
+        zip.file(
+          "src/components/ContainerElement.js",
+          generateContainerElementJs()
+        );
+        zip.file("src/components/DivElement.js", generateDivElementJs());
+        zip.file("src/components/CardElement.js", generateCardElementJs());
+      }
 
-      // Generate and download ZIP
       const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, "my-react-app.zip");
+      saveAs(content, "website-builder.zip");
     } catch (error) {
       console.error("Error generating code:", error);
-      alert("Failed to generate code. Please try again.");
     } finally {
-      setIsGenerating(false);
+      dispatch(setIsGenerating(false));
     }
+  }, [elements, framework, dispatch]);
+
+  // Function to add more space to the canvas
+  const addMoreSpace = () => {
+    dispatch(setExtraHeight(extraHeight + 500)); // Add 500px more height
   };
 
-  const selectedElement = elements.find((el) => el.id === selectedElementId);
-
   return (
-    <div
-      className={`flex flex-col min-h-full ${
-        isDarkTheme ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-800"
-      }`}
-    >
-      <div className="p-4 flex justify-between items-center">
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setIsResponsivePreview(!isResponsivePreview)}
-            className={`px-3 py-1 rounded text-sm ${
-              isDarkTheme
-                ? isResponsivePreview
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-700 text-white"
-                : isResponsivePreview
-                ? "bg-blue-500 text-white"
-                : "bg-gray-300 text-gray-800"
-            }`}
-          >
-            {isResponsivePreview ? "Fixed Scale" : "Responsive Preview"}
-          </button>
-        </div>
-        <div className="text-sm">
-          Scale: {Math.round(scaleFactor * 100)}% | Device: {device.name}
-        </div>
-      </div>
-
-      {/* Make the entire content area scrollable */}
-      <div className="flex-1 overflow-visible pb-20">
-        <div ref={canvasContainerRef} className="flex justify-center">
-          <div
-            style={{
-              transform: isResponsivePreview ? `scale(${scaleFactor})` : "none",
-              transformOrigin: "top center",
-              transition: "transform 0.3s ease",
-            }}
-          >
-            <div
-              ref={(node) => {
-                drop(node);
-                canvasRef.current = node;
-              }}
-              className={`relative mx-auto border ${
-                isDarkTheme
-                  ? `border-gray-600 ${isOver ? "bg-gray-700" : "bg-gray-800"}`
-                  : `border-gray-300 ${isOver ? "bg-gray-200" : "bg-white"}`
-              }`}
-              style={{
-                width: device.width,
-                minHeight: device.height + extraHeight,
-                backgroundImage: isDarkTheme
-                  ? "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(255,255,255,0.05) 20px)"
-                  : "repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0,0,0,0.05) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0,0,0,0.05) 20px)",
-              }}
-            >
-              {/* Only render top-level elements (those without a parent) to avoid duplicate rendering */}
-              {elements
-                .filter((el) => !el.parentId)
-                .map((el) => (
-                  <DroppedElement
-                    key={el.id}
-                    element={el}
-                    allElements={elements}
-                    onResize={updateElementSize}
-                    onPropertiesChange={updateElementProperties}
-                    onSelect={() => setSelectedElementId(el.id)}
-                    isSelected={el.id === selectedElementId}
-                    availablePages={allPages}
-                  />
-                ))}
-              <button
-                onClick={generateCode}
-                disabled={isGenerating}
-                className={`absolute bottom-4 right-4 px-4 py-2 rounded text-white ${
-                  isGenerating
-                    ? "bg-gray-500 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
-              >
-                {isGenerating ? "Generating..." : "Generate Code"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="fixed bottom-4 left-0 right-0 flex justify-center space-x-4 z-30">
-          <button
-            onClick={() => setExtraHeight(extraHeight + 300)}
-            className={`px-4 py-2 rounded shadow-lg ${
-              isDarkTheme
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-blue-500 text-white hover:bg-blue-600"
-            }`}
-          >
-            + Add More Canvas Space
-          </button>
-        </div>
-      </div>
-
-      {selectedElement && (
+    <div className="flex flex-col h-full">
+      <div
+        ref={canvasContainerRef}
+        className={`relative w-full flex-1 flex items-center justify-center overflow-hidden ${
+          isDarkTheme ? "bg-gray-900" : "bg-gray-100"
+        }`}
+      >
         <div
-          className={`style-editor-container p-6 ${
-            isDarkTheme ? "bg-gray-800" : "bg-white border border-gray-300"
-          }`}
+          ref={(node) => {
+            canvasRef.current = node;
+            drop(node);
+          }}
+          className={`relative ${
+            isDarkTheme ? "bg-gray-800" : "bg-white"
+          } shadow-lg`}
+          style={{
+            width: device.width,
+            height: device.height + extraHeight,
+            transform: `scale(${scaleFactor})`,
+            transformOrigin: "center center",
+            margin: "auto",
+          }}
         >
-          <div className="flex justify-between items-center mb-4">
-            <h3
-              className={`text-lg font-semibold ${
-                isDarkTheme ? "text-white" : "text-gray-800"
-              }`}
-            >
-              Style Editor for{" "}
-              {selectedElement.type.charAt(0).toUpperCase() +
-                selectedElement.type.slice(1)}
-            </h3>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => duplicateElement(selectedElement.id)}
-                className={`px-3 py-1 rounded text-sm ${
-                  isDarkTheme
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
-                    : "bg-indigo-500 text-white hover:bg-indigo-600"
-                }`}
-                title="Duplicate element"
-              >
-                Duplicate
-              </button>
-              <button
-                onClick={() => setSelectedElementId(null)}
-                className={`px-3 py-1 rounded text-sm ${
-                  isDarkTheme
-                    ? "bg-gray-600 text-white hover:bg-gray-700"
-                    : "bg-gray-300 text-gray-800 hover:bg-gray-400"
-                }`}
-                title="Close editor"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          {/* {elements.map((element) => ( */}
+          {elements
+            .filter((el) => !el.parentId)
+            .map((element) => (
+              <DroppedElement
+                key={element.id}
+                element={element}
+                isSelected={selectedElementId === element.id}
+                onSelect={() => dispatch(setSelectedElement(element.id))}
+                onDelete={() => deleteElement(element.id)}
+                onUpdate={(updatedElement) => {
+                  // Create a deep copy of the elements array to ensure we're not modifying the original
+                  const elementsCopy = JSON.parse(JSON.stringify(elements));
 
-          <StyleEditor
-            properties={selectedElement.properties}
-            onChange={(newStyles) =>
-              updateElementProperties(selectedElement.id, newStyles)
-            }
-            elementType={selectedElement.type}
-            availablePages={allPages}
-            isDarkTheme={isDarkTheme}
-          />
+                  // Update the element in the array
+                  const newElements = elementsCopy.map(
+                    (el: DroppedElementType) =>
+                      el.id === updatedElement.id ? updatedElement : el
+                  );
 
-          <div className="mt-6 pt-4 border-t border-gray-700 flex justify-between">
-            <button
-              onClick={() => deleteElement(selectedElement.id)}
-              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Delete Element
-            </button>
-            <div className="text-xs text-gray-500">
-              Element ID: {selectedElement.id} | Position: {selectedElement.x}x
-              {selectedElement.y} | Size: {selectedElement.width}x
-              {selectedElement.height}
-            </div>
-          </div>
+                  // Update the elements state
+                  throttledUpdateElements(newElements);
+                }}
+                scaleFactor={scaleFactor}
+                isDarkTheme={isDarkTheme}
+                canvasWidth={device.width}
+                canvasHeight={device.height + extraHeight}
+              />
+            ))}
         </div>
-      )}
+      </div>
+
+      <div
+        className={`flex justify-between items-center p-2 ${
+          isDarkTheme ? "bg-gray-800" : "bg-white"
+        } border-t ${isDarkTheme ? "border-gray-700" : "border-gray-200"}`}
+      >
+        <div className="flex-1"></div>
+        <div className="flex space-x-2">
+          <button
+            onClick={addMoreSpace}
+            className={`px-3 py-1 rounded flex items-center ${
+              isDarkTheme
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-blue-500 hover:bg-blue-600 text-white"
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+              />
+            </svg>
+            Add More Space
+          </button>
+
+          <button
+            onClick={generateCode}
+            disabled={isGenerating}
+            className={`px-4 py-2 rounded ${
+              isDarkTheme
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-blue-500 hover:bg-blue-600 text-white"
+            }`}
+          >
+            {isGenerating ? "Generating..." : "Generate Code"}
+          </button>
+        </div>
+      </div>
+
+      {selectedElementId &&
+        elements.some((el) => el.id === selectedElementId) && (
+          <div
+            className={`w-full ${
+              isDarkTheme ? "bg-gray-800" : "bg-white"
+            } border-t ${isDarkTheme ? "border-gray-700" : "border-gray-200"}`}
+          >
+            <StyleEditor
+              element={elements.find((el) => el.id === selectedElementId)!}
+              onUpdate={(updatedElement) => {
+                // Create a deep copy of the elements array to ensure we're not modifying the original
+                const elementsCopy = JSON.parse(JSON.stringify(elements));
+
+                // Update the element in the array
+                const newElements = elementsCopy.map((el: DroppedElementType) =>
+                  el.id === updatedElement.id ? updatedElement : el
+                );
+
+                // Update the elements state
+                throttledUpdateElements(newElements);
+              }}
+              onDelete={() => deleteElement(selectedElementId)}
+              isDarkTheme={isDarkTheme}
+            />
+            <ElementPathBreadcrumb
+              elements={elements}
+              selectedElementId={selectedElementId}
+              onSelect={(id) => dispatch(setSelectedElement(id))}
+              isDarkTheme={isDarkTheme}
+            />
+          </div>
+        )}
     </div>
   );
 }

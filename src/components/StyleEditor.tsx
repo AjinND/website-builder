@@ -1,331 +1,456 @@
-import { StyleEditorProps } from "@/types/types";
-import React from "react";
+import { StyleEditorProps, DroppedElementType } from "@/types/types";
+import React, { useState } from "react";
 
 export default function StyleEditor({
-  properties,
-  onChange,
-  elementType,
-  availablePages,
-  isDarkTheme = true
+  element,
+  onUpdate,
+  onDelete,
+  isDarkTheme = true,
 }: StyleEditorProps) {
+  const [activeTab, setActiveTab] = useState<"style" | "content">("style");
 
   // Helper function to get theme-appropriate class names for inputs
   const getInputClassName = (baseClasses: string) => {
-    return `${baseClasses} ${isDarkTheme ? 'bg-gray-700 text-white' : 'bg-white text-gray-800 border border-gray-300'}`;
+    return `${baseClasses} ${
+      isDarkTheme
+        ? "bg-gray-700 text-white"
+        : "bg-white text-gray-800 border border-gray-300"
+    }`;
   };
-  const renderCommonStyles = () => (
-    <>
-      <label className="block mb-2">
-        Text Color:
-        <input
-          type="color"
-          value={properties.textColor || "#ffffff"}
-          onChange={(e) => onChange({ textColor: e.target.value })}
-          className="ml-2"
-        />
-      </label>
-      <label className="block mb-2">
-        Font Size:
-        <input
-          type="number"
-          value={parseInt(properties.fontSize) || 16}
-          onChange={(e) => onChange({ fontSize: `${e.target.value}px` })}
-          className={getInputClassName('ml-2 w-16')}
-        />
-      </label>
-      <label className="block mb-2">
-        Font Weight:
-        <select
-          value={properties.fontWeight || "normal"}
-          onChange={(e) => onChange({ fontWeight: e.target.value })}
-          className={getInputClassName('ml-2')}
-        >
-          <option value="normal">Normal</option>
-          <option value="bold">Bold</option>
-          <option value="lighter">Lighter</option>
-        </select>
-      </label>
-      {(elementType === "header" || elementType === "navbar" || elementType === "jumbotron" || elementType === "button") && (
-        <label className="block mb-2">
-          Background Color:
-          <input
-            type="color"
-            value={properties.backgroundColor || "#333333"}
-            onChange={(e) => onChange({ backgroundColor: e.target.value })}
-            className="ml-2"
-          />
-        </label>
-      )}
-    </>
-  );
 
-  const renderLinkSelector = (linkProperty: string, label: string = "Link To Page") => (
-    <label className="block mb-2">
-      {label}:
-      <select
-        value={properties[linkProperty] || ""}
-        onChange={(e) => onChange({ [linkProperty]: e.target.value })}
-        className="ml-2 bg-gray-700 text-white"
-      >
-        <option value="">None</option>
-        {availablePages.map(page => (
-          <option key={page.id} value={`/${page.name.toLowerCase()}`}>
-            {page.name}
-          </option>
-        ))}
-        <option value="#external">External URL</option>
-      </select>
-      {properties[linkProperty] === "#external" && (
+  const handleChange = (newStyles: { [key: string]: any }) => {
+    onUpdate({
+      ...element,
+      properties: {
+        ...element.properties,
+        ...newStyles,
+      },
+    });
+  };
+
+  // Function to determine the input type based on property value
+  const getInputType = (value: any): string => {
+    if (typeof value === "boolean") return "checkbox";
+    if (typeof value === "number") return "number";
+    if (typeof value === "string" && value.startsWith("#")) return "color";
+    if (typeof value === "string" && value.endsWith("px")) return "number";
+    return "text";
+  };
+
+  // Function to handle array properties (like navLinks, menuItems)
+  const handleArrayPropertyChange = (
+    propertyName: string,
+    index: number,
+    field: string,
+    value: string
+  ) => {
+    const updatedArray = [...element.properties[propertyName]];
+    updatedArray[index] = { ...updatedArray[index], [field]: value };
+    handleChange({ [propertyName]: updatedArray });
+  };
+
+  // Function to add new item to array property
+  const handleAddArrayItem = (propertyName: string, template: any) => {
+    const updatedArray = [
+      ...(element.properties[propertyName] || []),
+      template,
+    ];
+    handleChange({ [propertyName]: updatedArray });
+  };
+
+  // Function to remove specific item from array property
+  const handleRemoveArrayItem = (propertyName: string, index: number) => {
+    const updatedArray = [...element.properties[propertyName]];
+    updatedArray.splice(index, 1);
+    handleChange({ [propertyName]: updatedArray });
+  };
+
+  // Function to categorize properties
+  const categorizeProperties = () => {
+    const styleProps: { [key: string]: any } = {};
+    const contentProps: { [key: string]: any } = {};
+
+    Object.entries(element.properties).forEach(([key, value]) => {
+      if (
+        key.includes("color") ||
+        key.includes("size") ||
+        key.includes("width") ||
+        key.includes("height") ||
+        key.includes("margin") ||
+        key.includes("padding") ||
+        key.includes("border") ||
+        key.includes("radius") ||
+        key.includes("shadow") ||
+        key.includes("font") ||
+        key.includes("background") ||
+        key.includes("opacity") ||
+        key.includes("transform") ||
+        key.includes("transition") ||
+        key.includes("animation") ||
+        key.includes("display") ||
+        key.includes("position") ||
+        key.includes("z-index") ||
+        key.includes("overflow") ||
+        key.includes("cursor") ||
+        key.includes("text-align") ||
+        key.includes("line-height") ||
+        key.includes("letter-spacing") ||
+        key.includes("text-transform") ||
+        key.includes("text-decoration") ||
+        key.includes("white-space") ||
+        key.includes("word-break") ||
+        key.includes("word-wrap") ||
+        key.includes("vertical-align") ||
+        key.includes("list-style") ||
+        key.includes("outline") ||
+        key.includes("box-shadow") ||
+        key.includes("filter") ||
+        key.includes("backdrop-filter") ||
+        key.includes("perspective") ||
+        key.includes("backface-visibility") ||
+        key.includes("transform-style") ||
+        key.includes("transform-origin") ||
+        key.includes("transition-property") ||
+        key.includes("transition-duration") ||
+        key.includes("transition-timing-function") ||
+        key.includes("transition-delay") ||
+        key.includes("animation-name") ||
+        key.includes("animation-duration") ||
+        key.includes("animation-timing-function") ||
+        key.includes("animation-delay") ||
+        key.includes("animation-iteration-count") ||
+        key.includes("animation-direction") ||
+        key.includes("animation-fill-mode") ||
+        key.includes("animation-play-state")
+      ) {
+        styleProps[key] = value;
+      } else {
+        contentProps[key] = value;
+      }
+    });
+
+    return { styleProps, contentProps };
+  };
+
+  // Function to render input based on property type
+  const renderPropertyInput = (propertyName: string, value: any) => {
+    const inputType = getInputType(value);
+
+    if (Array.isArray(value)) {
+      return (
+        <div className="col-span-3 mb-4">
+          <h4 className="text-sm font-medium mb-2 capitalize">
+            {propertyName.replace(/([A-Z])/g, " $1").trim()}
+          </h4>
+          <div className="space-y-2">
+            {value.map((item: any, index: number) => (
+              <div
+                key={index}
+                className={`p-3 rounded-md ${
+                  isDarkTheme ? "bg-gray-700" : "bg-gray-100"
+                } relative`}
+              >
+                <button
+                  onClick={() => handleRemoveArrayItem(propertyName, index)}
+                  className={`absolute top-2 right-2 p-1 rounded-full ${
+                    isDarkTheme
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-red-500 hover:bg-red-600"
+                  } text-white`}
+                  title="Delete item"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(item).map(([field, fieldValue]) => (
+                    <label key={field} className="block">
+                      <span className="text-xs text-gray-400 capitalize">
+                        {field.replace(/([A-Z])/g, " $1").trim()}:
+                      </span>
+                      <input
+                        type="text"
+                        value={fieldValue as string}
+                        onChange={(e) =>
+                          handleArrayPropertyChange(
+                            propertyName,
+                            index,
+                            field,
+                            e.target.value
+                          )
+                        }
+                        className={getInputClassName("ml-2 w-full p-1 rounded")}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() =>
+              handleAddArrayItem(propertyName, { text: "New Item", url: "/" })
+            }
+            className={`px-3 py-1 rounded mt-2 flex items-center ${
+              isDarkTheme
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-blue-500 hover:bg-blue-600 text-white"
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Add {propertyName.replace(/([A-Z])/g, " $1").trim()}
+          </button>
+        </div>
+      );
+    }
+
+    if (inputType === "checkbox") {
+      return (
+        <div className="flex items-center mb-3">
+          <label className="flex items-center cursor-pointer">
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={value}
+                onChange={(e) =>
+                  handleChange({ [propertyName]: e.target.checked })
+                }
+                className="sr-only"
+              />
+              <div
+                className={`block w-10 h-6 rounded-full ${
+                  value
+                    ? isDarkTheme
+                      ? "bg-blue-600"
+                      : "bg-blue-500"
+                    : isDarkTheme
+                    ? "bg-gray-600"
+                    : "bg-gray-300"
+                }`}
+              ></div>
+              <div
+                className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out ${
+                  value ? "transform translate-x-4" : ""
+                }`}
+              ></div>
+            </div>
+            <div className="ml-3 capitalize">
+              {propertyName.replace(/([A-Z])/g, " $1").trim()}
+            </div>
+          </label>
+        </div>
+      );
+    }
+
+    if (inputType === "color") {
+      return (
+        <div className="mb-3">
+          <label className="block text-sm capitalize mb-1">
+            {propertyName.replace(/([A-Z])/g, " $1").trim()}
+          </label>
+          <div className="flex items-center">
+            <input
+              type="color"
+              value={value}
+              onChange={(e) => handleChange({ [propertyName]: e.target.value })}
+              className="h-8 w-8 rounded cursor-pointer"
+            />
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => handleChange({ [propertyName]: e.target.value })}
+              className={getInputClassName("ml-2 w-24 p-1 rounded text-sm")}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (inputType === "number") {
+      const numericValue = typeof value === "string" ? parseInt(value) : value;
+      const isSize =
+        propertyName.toLowerCase().includes("size") ||
+        propertyName.toLowerCase().includes("width") ||
+        propertyName.toLowerCase().includes("height") ||
+        propertyName.toLowerCase().includes("margin") ||
+        propertyName.toLowerCase().includes("padding") ||
+        propertyName.toLowerCase().includes("border") ||
+        propertyName.toLowerCase().includes("radius");
+
+      return (
+        <div className="mb-3">
+          <label className="block text-sm capitalize mb-1">
+            {propertyName.replace(/([A-Z])/g, " $1").trim()}
+          </label>
+          <div className="flex items-center">
+            <input
+              type="number"
+              value={numericValue}
+              onChange={(e) => {
+                const newValue = e.target.value;
+                handleChange({
+                  [propertyName]: isSize ? `${newValue}px` : newValue,
+                });
+              }}
+              className={getInputClassName("w-20 p-1 rounded text-sm")}
+            />
+            {isSize && <span className="ml-2 text-sm text-gray-400">px</span>}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mb-3">
+        <label className="block text-sm capitalize mb-1">
+          {propertyName.replace(/([A-Z])/g, " $1").trim()}
+        </label>
         <input
           type="text"
-          placeholder="https://example.com"
-          value={properties.externalUrl || ""}
-          onChange={(e) => onChange({ externalUrl: e.target.value, [linkProperty]: e.target.value })}
-          className="mt-1 w-full bg-gray-700 text-white p-1"
+          value={value}
+          onChange={(e) => handleChange({ [propertyName]: e.target.value })}
+          className={getInputClassName("w-full p-1 rounded text-sm")}
         />
-      )}
-    </label>
-  );
-
-  const renderElementSpecificFields = () => {
-    switch (elementType) {
-      case "header":
-        return (
-          <>
-            <label className="block mb-2">
-              Logo URL:
-              <input
-                type="text"
-                value={properties.logoUrl || ""}
-                onChange={(e) => onChange({ logoUrl: e.target.value })}
-                className={getInputClassName('ml-2 w-full')}
-              />
-            </label>
-            <div className="block mb-2">
-              <label>Navigation Links:</label>
-              {properties.navLinks && properties.navLinks.map((link: any, index: number) => (
-                <div key={index} className="flex items-center mt-1">
-                  <input
-                    type="text"
-                    value={link.text}
-                    onChange={(e) => {
-                      const newLinks = [...properties.navLinks];
-                      newLinks[index].text = e.target.value;
-                      onChange({ navLinks: newLinks });
-                    }}
-                    className="w-1/2 mr-1 bg-gray-700 text-white p-1"
-                    placeholder="Link Text"
-                  />
-                  <select
-                    value={link.url}
-                    onChange={(e) => {
-                      const newLinks = [...properties.navLinks];
-                      newLinks[index].url = e.target.value;
-                      onChange({ navLinks: newLinks });
-                    }}
-                    className="w-1/2 bg-gray-700 text-white p-1"
-                  >
-                    {availablePages.map(page => (
-                      <option key={page.id} value={`/${page.name.toLowerCase()}`}>
-                        {page.name}
-                      </option>
-                    ))}
-                    <option value="#external">External URL</option>
-                  </select>
-                  {link.url === "#external" && (
-                    <input
-                      type="text"
-                      placeholder="https://example.com"
-                      value={link.externalUrl || ""}
-                      onChange={(e) => {
-                        const newLinks = [...properties.navLinks];
-                        newLinks[index].externalUrl = e.target.value;
-                        newLinks[index].url = e.target.value;
-                        onChange({ navLinks: newLinks });
-                      }}
-                      className="w-full mt-1 bg-gray-700 text-white p-1"
-                    />
-                  )}
-                  <button
-                    onClick={() => {
-                      const newLinks = properties.navLinks.filter((_: any, i: number) => i !== index);
-                      onChange({ navLinks: newLinks });
-                    }}
-                    className="ml-1 bg-red-500 text-white p-1 rounded"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={() => {
-                  const newLinks = [...(properties.navLinks || []), { text: "New Link", url: "/" }];
-                  onChange({ navLinks: newLinks });
-                }}
-                className="mt-1 bg-gray-700 text-white p-1 rounded"
-              >
-                + Add Link
-              </button>
-            </div>
-          </>
-        );
-      case "navbar":
-        return (
-          <>
-            <div className="block mb-2">
-              <label>Menu Items:</label>
-              {properties.menuItems && properties.menuItems.map((item: any, index: number) => (
-                <div key={index} className="flex items-center mt-1">
-                  <input
-                    type="text"
-                    value={item.text}
-                    onChange={(e) => {
-                      const newItems = [...properties.menuItems];
-                      newItems[index].text = e.target.value;
-                      onChange({ menuItems: newItems });
-                    }}
-                    className="w-1/2 mr-1 bg-gray-700 text-white p-1"
-                    placeholder="Menu Text"
-                  />
-                  <select
-                    value={item.url}
-                    onChange={(e) => {
-                      const newItems = [...properties.menuItems];
-                      newItems[index].url = e.target.value;
-                      onChange({ menuItems: newItems });
-                    }}
-                    className="w-1/2 bg-gray-700 text-white p-1"
-                  >
-                    {availablePages.map(page => (
-                      <option key={page.id} value={`/${page.name.toLowerCase()}`}>
-                        {page.name}
-                      </option>
-                    ))}
-                    <option value="#external">External URL</option>
-                  </select>
-                  {item.url === "#external" && (
-                    <input
-                      type="text"
-                      placeholder="https://example.com"
-                      value={item.externalUrl || ""}
-                      onChange={(e) => {
-                        const newItems = [...properties.menuItems];
-                        newItems[index].externalUrl = e.target.value;
-                        newItems[index].url = e.target.value;
-                        onChange({ menuItems: newItems });
-                      }}
-                      className="w-full mt-1 bg-gray-700 text-white p-1"
-                    />
-                  )}
-                  <button
-                    onClick={() => {
-                      const newItems = properties.menuItems.filter((_: any, i: number) => i !== index);
-                      onChange({ menuItems: newItems });
-                    }}
-                    className="ml-1 bg-red-500 text-white p-1 rounded"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={() => {
-                  const newItems = [...(properties.menuItems || []), { text: "New Item", url: "/" }];
-                  onChange({ menuItems: newItems });
-                }}
-                className="mt-1 bg-gray-700 text-white p-1 rounded"
-              >
-                + Add Item
-              </button>
-            </div>
-          </>
-        );
-      case "jumbotron":
-        return (
-          <>
-            <label className="block mb-2">
-              Heading:
-              <input
-                type="text"
-                value={properties.heading || ""}
-                onChange={(e) => onChange({ heading: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-              />
-            </label>
-            <label className="block mb-2">
-              Subtext:
-              <textarea
-                value={properties.subtext || ""}
-                onChange={(e) => onChange({ subtext: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-                rows={3}
-              />
-            </label>
-            <label className="block mb-2">
-              Button Text:
-              <input
-                type="text"
-                value={properties.buttonText || ""}
-                onChange={(e) => onChange({ buttonText: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-              />
-            </label>
-            {renderLinkSelector("buttonUrl", "Button Links To")}
-          </>
-        );
-      case "text":
-        return (
-          <>
-            <label className="block mb-2">
-              Content:
-              <textarea
-                value={properties.content || ""}
-                onChange={(e) => onChange({ content: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-                rows={4}
-              />
-            </label>
-          </>
-        );
-      case "button":
-        return (
-          <>
-            <label className="block mb-2">
-              Button Text:
-              <input
-                type="text"
-                value={properties.text || ""}
-                onChange={(e) => onChange({ text: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-              />
-            </label>
-            {renderLinkSelector("linkTo")}
-          </>
-        );
-      case "image":
-        return (
-          <>
-            <label className="block mb-2">
-              Image URL:
-              <input
-                type="text"
-                value={properties.imageUrl || ""}
-                onChange={(e) => onChange({ imageUrl: e.target.value })}
-                className="ml-2 w-full bg-gray-700 text-white p-1"
-              />
-            </label>
-            {renderLinkSelector("linkTo")}
-          </>
-        );
-      default:
-        return null;
-    }
+      </div>
+    );
   };
 
+  const { styleProps, contentProps } = categorizeProperties();
+
   return (
-    <div className={`p-4 ${isDarkTheme ? 'bg-gray-800 text-white' : 'bg-white text-gray-800 border border-gray-300'}`}>
-      {renderCommonStyles()}
-      {renderElementSpecificFields()}
+    <div
+      className={`p-4 ${
+        isDarkTheme ? "bg-gray-800 text-white" : "bg-white text-gray-800"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Element Properties</h3>
+          <button
+            onClick={onDelete}
+            className={`px-3 py-1 rounded flex items-center ${
+              isDarkTheme
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-red-500 hover:bg-red-600 text-white"
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+            Delete Element
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-4 border-b border-gray-600">
+          <div className="flex">
+            <button
+              className={`py-2 px-4 font-medium text-sm ${
+                activeTab === "style"
+                  ? isDarkTheme
+                    ? "border-b-2 border-blue-500 text-blue-400"
+                    : "border-b-2 border-blue-500 text-blue-600"
+                  : isDarkTheme
+                  ? "text-gray-400 hover:text-gray-300"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => setActiveTab("style")}
+            >
+              Style Properties
+            </button>
+            <button
+              className={`py-2 px-4 font-medium text-sm ${
+                activeTab === "content"
+                  ? isDarkTheme
+                    ? "border-b-2 border-blue-500 text-blue-400"
+                    : "border-b-2 border-blue-500 text-blue-600"
+                  : isDarkTheme
+                  ? "text-gray-400 hover:text-gray-300"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+              onClick={() => setActiveTab("content")}
+            >
+              Content Properties
+            </button>
+          </div>
+        </div>
+
+        {/* Properties */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {activeTab === "style" &&
+            Object.entries(styleProps).map(([propertyName, value]) => (
+              <div
+                key={propertyName}
+                className={`p-3 rounded-md ${
+                  isDarkTheme ? "bg-gray-700" : "bg-gray-100"
+                }`}
+              >
+                {renderPropertyInput(propertyName, value)}
+              </div>
+            ))}
+
+          {activeTab === "content" &&
+            Object.entries(contentProps).map(([propertyName, value]) => (
+              <div
+                key={propertyName}
+                className={`p-3 rounded-md ${
+                  isDarkTheme ? "bg-gray-700" : "bg-gray-100"
+                }`}
+              >
+                {renderPropertyInput(propertyName, value)}
+              </div>
+            ))}
+
+          {activeTab === "style" && Object.keys(styleProps).length === 0 && (
+            <div className="col-span-3 text-center py-4 text-gray-400">
+              No style properties available for this element
+            </div>
+          )}
+
+          {activeTab === "content" &&
+            Object.keys(contentProps).length === 0 && (
+              <div className="col-span-3 text-center py-4 text-gray-400">
+                No content properties available for this element
+              </div>
+            )}
+        </div>
+      </div>
     </div>
   );
 }

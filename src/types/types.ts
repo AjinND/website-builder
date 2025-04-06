@@ -11,22 +11,21 @@ export interface DroppedElementType {
 }
 
 export interface StyleEditorProps {
-  properties: { [key: string]: any };
-  onChange: (newStyles: { [key: string]: any }) => void;
-  elementType: string;
-  availablePages: Page[];
+  element: DroppedElementType;
+  onUpdate: (updatedElement: DroppedElementType) => void;
+  onDelete: () => void;
   isDarkTheme?: boolean;
 }
 
- interface Device {
+export interface Device {
   name: string;
   width: number;
   height: number;
 }
 
 export interface DeviceSelectorProps {
-  device: { width: number; height: number; name: string };
-  setDevice: (device: { width: number; height: number; name: string }) => void;
+  device: Device;
+  setDevice: (device: Device) => void;
   isDarkTheme?: boolean;
 }
 
@@ -39,9 +38,25 @@ export interface Page {
 export interface CanvasProps {
   framework: string;
   device: Device;
+  isDarkTheme?: boolean;
+}
+
+export interface DroppedElementProps {
+  element: DroppedElementType;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  onUpdate: (updatedElement: DroppedElementType) => void;
+  scaleFactor: number;
+  isDarkTheme?: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
+export interface ElementPathBreadcrumbProps {
   elements: DroppedElementType[];
-  updateElements: (elements: DroppedElementType[]) => void;
-  allPages: Page[];
+  selectedElementId: number | null;
+  onSelect: (id: number) => void;
   isDarkTheme?: boolean;
 }
 

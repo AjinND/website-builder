@@ -20,15 +20,16 @@ const ToolboxItem: React.FC<ToolboxItemProps> = ({
   return (
     <div
       ref={drag}
-      className={`p-2 my-2 bg-gray-700 rounded cursor-move ${
-        isDragging ? "opacity-50" : "opacity-100"
-      } hover:bg-gray-600 transition-all duration-150`}
+      className={`p-3 my-2 bg-gray-700/50 backdrop-blur-sm rounded-lg cursor-move border border-gray-600/30 
+        ${isDragging ? "opacity-50 scale-95" : "opacity-100 scale-100"} 
+        hover:bg-gray-600/50 hover:border-gray-500/50 hover:scale-[1.02] 
+        transition-all duration-200 ease-in-out shadow-sm`}
     >
-      <div className="font-medium flex items-center">
-        {icon && <span className="mr-2">{icon}</span>}
-        {children}
+      <div className="font-medium flex items-center gap-2">
+        {icon && <span className="text-lg">{icon}</span>}
+        <span className="text-sm">{children}</span>
       </div>
-      <div className="text-xs text-gray-400 mt-1">{description}</div>
+      <div className="text-xs text-gray-400 mt-1.5">{description}</div>
     </div>
   );
 };
@@ -42,13 +43,21 @@ const Category: React.FC<CategoryProps> = ({
   return (
     <div className="mb-4">
       <div
-        className="flex items-center justify-between cursor-pointer py-2 border-b border-gray-700"
+        className="flex items-center justify-between cursor-pointer py-2.5 border-b border-gray-700/50 hover:border-gray-600/50 transition-colors duration-200"
         onClick={onToggle}
       >
-        <h4 className="text-sm font-semibold">{title}</h4>
-        <span>{isOpen ? "▼" : "►"}</span>
+        <h4 className="text-sm font-semibold text-gray-200">{title}</h4>
+        <span className="text-gray-400 transition-transform duration-200">
+          {isOpen ? "▼" : "►"}
+        </span>
       </div>
-      {isOpen && <div className="mt-2">{children}</div>}
+      <div
+        className={`mt-2 transition-all duration-200 ${
+          isOpen ? "opacity-100" : "opacity-0 hidden"
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 };
@@ -114,8 +123,10 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
       if (isDraggingToolbox && headerRef.current) {
         const newX = e.clientX - dragOffset.x;
         const newY = e.clientY - dragOffset.y;
-        const maxX = window.innerWidth - (toolboxRef.current?.offsetWidth || 300);
-        const maxY = window.innerHeight - (headerRef.current?.offsetHeight || 40);
+        const maxX =
+          window.innerWidth - (toolboxRef.current?.offsetWidth || 300);
+        const maxY =
+          window.innerHeight - (headerRef.current?.offsetHeight || 40);
         setPosition({
           x: Math.max(0, Math.min(newX, maxX)),
           y: Math.max(0, Math.min(newY, maxY)),
@@ -155,9 +166,12 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
   const ToolboxToggleButton = () => (
     <div
       onClick={handleToggleOpen}
-      className={`fixed z-50 shadow-lg flex items-center justify-center cursor-pointer ${
-        isDarkTheme ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-white text-gray-800 hover:bg-gray-100 border border-gray-300"
-      }`}
+      className={`fixed z-50 shadow-lg flex items-center justify-center cursor-pointer 
+        ${
+          isDarkTheme
+            ? "bg-gray-800/90 backdrop-blur-sm text-white hover:bg-gray-700/90"
+            : "bg-white/90 text-gray-800 hover:bg-gray-100/90 border border-gray-300"
+        } transition-all duration-200 hover:scale-105`}
       style={{
         top: "50%",
         transform: "translateY(-50%)",
@@ -169,7 +183,7 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
       title={isOpen ? "Close Toolbox" : "Open Toolbox"}
     >
       <div
-        className="vertical-text"
+        className="vertical-text font-medium"
         style={{
           writingMode: "vertical-rl",
           textOrientation: "mixed",
@@ -188,35 +202,60 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
     return (
       <div
         ref={toolboxRef}
-        className={`fixed z-40 rounded-lg shadow-xl overflow-hidden transition-all duration-200 ${
-          isDarkTheme ? "bg-gray-800 text-white" : "bg-white text-gray-800 border border-gray-300"
-        } ${isMinimized ? "w-16" : "w-64"}`}
-        style={{ top: `${position.y}px`, left: `${position.x}px` }}
+        className={`fixed z-40 rounded-lg shadow-xl overflow-hidden transition-all duration-300 
+          ${
+            isDarkTheme
+              ? "bg-gray-800/95 backdrop-blur-sm text-white"
+              : "bg-white/95 text-gray-800 border border-gray-300"
+          } ${isMinimized ? "w-16" : "w-72"}`}
+        style={{
+          top: `${position.y}px`,
+          left: `${position.x}px`,
+          transition: "width 0.3s ease-in-out, transform 0.3s ease-in-out",
+        }}
       >
         {/* Toolbox header */}
         <div
           ref={headerRef}
-          className={`p-2 ${isDarkTheme ? "bg-gray-700" : "bg-gray-100"} flex ${
-            isMinimized ? "flex-col items-center" : "justify-between items-center"
-          } cursor-move`}
+          className={`p-3 ${isDarkTheme ? "bg-gray-700/50" : "bg-gray-100/50"} 
+            flex ${
+              isMinimized
+                ? "flex-col items-center"
+                : "justify-between items-center"
+            } 
+            cursor-move backdrop-blur-sm border-b border-gray-700/30`}
           onMouseDown={handleMouseDown}
         >
-          <div className={`flex ${isMinimized ? "flex-col" : "items-center"}`}>
-            <span className="mr-2">🧰</span>
+          <div
+            className={`flex ${
+              isMinimized ? "flex-col" : "items-center gap-2"
+            }`}
+          >
+            <span className="text-lg">🧰</span>
             {!isMinimized && <h3 className="text-sm font-semibold">Toolbox</h3>}
           </div>
-          <div className={`flex ${isMinimized ? "flex-col" : "space-x-1"}`}>
+          <div
+            className={`flex ${isMinimized ? "flex-col gap-1" : "space-x-1"}`}
+          >
             <button
+              aria-label="Toggle toolbox"
               onClick={toggleDockPosition}
               title={`Dock to ${dockPosition === "left" ? "right" : "left"}`}
-              className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
+              className={`p-1.5 rounded-md transition-colors duration-200
+                ${
+                  isDarkTheme ? "hover:bg-gray-600/50" : "hover:bg-gray-200/50"
+                }`}
             >
               {dockPosition === "left" ? "⬅️" : "➡️"}
             </button>
             <button
+              aria-label="Toggle toolbox"
               onClick={handleMinimize}
               title={isMinimized ? "Expand" : "Minimize"}
-              className={`p-1 rounded ${isDarkTheme ? "hover:bg-gray-600" : "hover:bg-gray-200"}`}
+              className={`p-1.5 rounded-md transition-colors duration-200
+                ${
+                  isDarkTheme ? "hover:bg-gray-600/50" : "hover:bg-gray-200/50"
+                }`}
             >
               {isMinimized ? "📋" : "➖"}
             </button>
@@ -225,8 +264,8 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
 
         {/* Toolbox content */}
         {!isMinimized && (
-          <div className="p-3 max-h-[70vh] overflow-y-auto">
-            <p className="text-xs text-gray-400 mb-4">
+          <div className="p-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <p className="text-xs text-gray-400 mb-4 italic">
               Drag and drop elements onto the canvas to build your pages
             </p>
 
@@ -370,9 +409,11 @@ export default function Toolbox({ isDarkTheme = true }: ToolboxProps) {
               </ToolboxItem>
             </Category>
 
-            <div className="mt-6 pt-4 border-t border-gray-700">
-              <h4 className="text-sm font-semibold mb-2">Instructions</h4>
-              <ol className="text-xs text-gray-400 list-decimal pl-4 space-y-1">
+            <div className="mt-6 pt-4 border-t border-gray-700/30">
+              <h4 className="text-sm font-semibold mb-2 text-gray-200">
+                Instructions
+              </h4>
+              <ol className="text-xs text-gray-400 list-decimal pl-4 space-y-1.5">
                 <li>Drag elements to the canvas</li>
                 <li>Click an element to edit it</li>
                 <li>Add pages with the + button above</li>
