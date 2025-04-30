@@ -44,4 +44,4 @@ export const {
   setCurrentPage,
 } = pageSlice.actions;
 
-export default pageSlice.reducer; 
+export default pageSlice.reducer;

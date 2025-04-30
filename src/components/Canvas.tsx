@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 import { useDrop } from "react-dnd";
 import { throttle } from "lodash";
 import JSZip from "jszip";
@@ -21,7 +21,8 @@ import {
   generateDivElementJs,
   generateCardElementJs,
 } from "@/utils/codeGenerators";
-import { DroppedElementType, Page } from "@/types/types";
+import { generateCodeWithAI } from "@/utils/openaiApi";
+import { DroppedElementType, CanvasProps, AIModelProvider } from "@/types/types";
 import {
   getAbsolutePosition,
   getDepth,
@@ -39,15 +40,7 @@ import {
 import { RootState } from "@/store/store";
 import { CanvasState } from "@/store/canvasSlice";
 
-interface CanvasProps {
-  framework: string;
-  device: {
-    name: string;
-    width: number;
-    height: number;
-  };
-  isDarkTheme?: boolean;
-}
+// Using CanvasProps from types.ts
 
 export default function Canvas({
   framework,
@@ -441,46 +434,165 @@ export default function Canvas({
     [elements, calculateScaleFactor, safeUpdateElements]
   );
 
+  // State for AI model selection
+  const [selectedAIModel, setSelectedAIModel] = useState<AIModelProvider>(AIModelProvider.GEMINI);
+  const [aiGenerationError, setAiGenerationError] = useState<string | null>(null);
+  const [showAIModelSelector, setShowAIModelSelector] = useState<boolean>(false);
+
+  // Function to toggle AI model selector
+  const toggleAIModelSelector = () => {
+    setShowAIModelSelector(!showAIModelSelector);
+  };
+
+  // Function to select AI model
+  const selectAIModel = (model: AIModelProvider) => {
+    setSelectedAIModel(model);
+    setShowAIModelSelector(false);
+  };
+
+  // Function to generate code using traditional method
+  // const generateCodeTraditional = async () => {
+  //   try {
+  //     const zip = new JSZip();
+
+  //     // Add common files
+  //     zip.file("index.html", generateIndexHtml());
+  //     zip.file("package.json", generateReactPackageJson());
+  //     zip.file("tailwind.config.js", generateTailwindConfig());
+  //     zip.file("postcss.config.js", generatePostCssConfig());
+  //     zip.file("src/index.css", generateIndexCss());
+
+  //     // Add framework-specific files
+  //     if (framework === "React") {
+  //       zip.file("src/index.js", generateIndexJs());
+
+  //       // Create a Page object from the elements array
+  //       const currentPage: Page = {
+  //         id: "page-1",
+  //         name: "Home",
+  //         elements: elements,
+  //       };
+
+  //       zip.file("src/App.js", generateAppRouterJs([currentPage]));
+  //       zip.file(
+  //         "src/components/ContainerElement.js",
+  //         generateContainerElementJs()
+  //       );
+  //       zip.file("src/components/DivElement.js", generateDivElementJs());
+  //       zip.file("src/components/CardElement.js", generateCardElementJs());
+  //     }
+
+  //     const content = await zip.generateAsync({ type: "blob" });
+  //     saveAs(content, "website-builder.zip");
+  //   } catch (error) {
+  //     console.error("Error generating code:", error);
+  //     throw error;
+  //   }
+  // };
+
+  // Function to generate code using AI
+  const generateCodeWithAIModel = async (elements: DroppedElementType[]) => {
+    try {
+      setAiGenerationError(null);
+
+      console.log("Generating code with AI..." + elements);
+      
+      // Create a design data object that includes all necessary information
+      const designData = {
+        framework: "Next.js", // Always use Next.js for AI generation
+        pages: [
+          {
+            id: "page-1",
+            name: "Home",
+            elements: elements,
+          },
+        ],
+        theme: {
+          colors: {
+            primary: "#3490dc",
+            secondary: "#ffed4a",
+            danger: "#e3342f",
+            success: "#38c172",
+          },
+        },
+      };
+
+      // Call the AI API to generate code
+      const generatedCode = await generateCodeWithAI(designData, selectedAIModel);
+      
+      // Create a text file with the generated code
+      const blob = new Blob([generatedCode], { type: "text/plain;charset=utf-8" });
+      saveAs(blob, "nextjs-ai-generated-code.txt");
+      
+      return generatedCode;
+    } catch (error) {
+      console.error("Error generating code with AI:", error);
+      setAiGenerationError(error instanceof Error ? error.message : "Unknown error occurred");
+      throw error;
+    }
+  };
+
+  // Main generate code function that decides which method to use
   const generateCode = useCallback(async () => {
     dispatch(setIsGenerating(true));
+    // console.log("Generating code...", elements);
+    
     try {
-      const zip = new JSZip();
+      // Use AI-based code generation
+      // await generateCodeWithAIModel(elements);
+      const designData = {
+        framework: "Next.js",
+        pages: [
+          {
+            id: "page-1",
+            name: "Home",
+            elements: elements,
+          },
+        ],
+        theme: {
+          colors: {
+            primary: "#3490dc",
+            secondary: "#ffed4a",
+            danger: "#e3342f",
+            success: "#38c172",
+          },
+        },
+      };
 
-      // Add common files
-      zip.file("index.html", generateIndexHtml());
-      zip.file("package.json", generateReactPackageJson());
-      zip.file("tailwind.config.js", generateTailwindConfig());
-      zip.file("postcss.config.js", generatePostCssConfig());
-      zip.file("src/index.css", generateIndexCss());
+      const response = await fetch('/api/generate-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          designData,
+          provider: selectedAIModel,
+        }),
+      });
 
-      // Add framework-specific files
-      if (framework === "React") {
-        zip.file("src/index.js", generateIndexJs());
+      const data = await response.json();
 
-        // Create a Page object from the elements array
-        const currentPage: Page = {
-          id: "page-1",
-          name: "Home",
-          elements: elements,
-        };
-
-        zip.file("src/App.js", generateAppRouterJs([currentPage]));
-        zip.file(
-          "src/components/ContainerElement.js",
-          generateContainerElementJs()
-        );
-        zip.file("src/components/DivElement.js", generateDivElementJs());
-        zip.file("src/components/CardElement.js", generateCardElementJs());
+      if (!data.success) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate code');
       }
-
-      const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, "website-builder.zip");
+      console.log("AI-generated code:", data);
+      const code = data.generatedCode;
+      const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+      saveAs(blob, "nextjs-ai-generated-code.txt");
     } catch (error) {
-      console.error("Error generating code:", error);
+      console.error("Error in code generation:", error);
+      setAiGenerationError(error instanceof Error ? error.message : "Unknown error occurred");
+      // If AI generation fails, fall back to traditional method
+      // try {
+      //   await generateCodeTraditional();
+      // } catch (secondError) {
+      //   console.error("Both code generation methods failed:", secondError);
+      // }
     } finally {
       dispatch(setIsGenerating(false));
     }
-  }, [elements, framework, dispatch]);
+  }, [elements, framework, dispatch, selectedAIModel, setAiGenerationError]);
 
   // Function to add more space to the canvas
   const addMoreSpace = () => {
@@ -575,6 +687,62 @@ export default function Canvas({
             Add More Space
           </button>
 
+          {/* AI Model Selector */}
+          <div className="relative">
+            <button
+              onClick={toggleAIModelSelector}
+              className={`px-4 py-2 rounded flex items-center ${
+                isDarkTheme
+                  ? "bg-purple-600 hover:bg-purple-700 text-white"
+                  : "bg-purple-500 hover:bg-purple-600 text-white"
+              }`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4 mr-1"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+              {selectedAIModel}
+            </button>
+            
+            {showAIModelSelector && (
+              <div 
+                className={`absolute bottom-full right-0 mb-1 rounded shadow-lg z-10 ${
+                  isDarkTheme ? "bg-gray-800" : "bg-white"
+                } border ${isDarkTheme ? "border-gray-700" : "border-gray-200"}`}
+              >
+                {Object.values(AIModelProvider).map((model) => (
+                  <button
+                    key={model}
+                    onClick={() => selectAIModel(model)}
+                    className={`block w-full text-left px-4 py-2 ${
+                      selectedAIModel === model
+                        ? isDarkTheme
+                          ? "bg-blue-900"
+                          : "bg-blue-100"
+                        : ""
+                    } ${
+                      isDarkTheme
+                        ? "hover:bg-gray-700 text-white"
+                        : "hover:bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {model}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={generateCode}
             disabled={isGenerating}
@@ -584,9 +752,23 @@ export default function Canvas({
                 : "bg-blue-500 hover:bg-blue-600 text-white"
             }`}
           >
-            {isGenerating ? "Generating..." : "Generate Code"}
+            {isGenerating ? "Generating..." : "Generate Code with AI"}
           </button>
         </div>
+        
+        {/* Error message display */}
+        {aiGenerationError && (
+          <div className="absolute bottom-16 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <strong className="font-bold">Error: </strong>
+            <span className="block sm:inline">{aiGenerationError}</span>
+            <button 
+              onClick={() => setAiGenerationError(null)}
+              className="absolute top-0 right-0 px-2 py-1"
+            >
+              &times;
+            </button>
+          </div>
+        )}
       </div>
 
       {selectedElementId &&
